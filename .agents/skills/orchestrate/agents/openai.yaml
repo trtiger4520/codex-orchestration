@@ -1,0 +1,6 @@
+interface:
+  display_name: "多子任務協作"
+  short_description: "以專責代理執行規劃、平行實作、獨立驗收與失敗修正循環"
+  default_prompt: "Use $orchestrate to coordinate this task through planning, implementation, and independent verification."
+policy:
+  allow_implicit_invocation: false

@@ -1,0 +1,6 @@
+interface:
+  display_name: "獨立變更驗收"
+  short_description: "由獨立代理檢查變更、執行測試並回報可驗證的通過或失敗證據"
+  default_prompt: "Use $verify to independently validate the current changes and report PASS or FAIL."
+policy:
+  allow_implicit_invocation: false
