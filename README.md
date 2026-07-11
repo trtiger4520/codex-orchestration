@@ -8,31 +8,36 @@
 |---|---|---|---|---|
 | 專責 custom agents | 支援 | 支援 | 支援 | 支援，依產品可用性而定 |
 | `$orchestrate`、`$verify` skills | 支援 | 支援 | 支援 | 支援 Agent Skills 的介面可用 |
-| GPT-5.6 模型分工 | 支援，需具備預覽權限 | 支援，需具備預覽權限 | 不套用 | 不套用 |
+| 子代理模型選擇 | 由目前工作階段與 Codex 自動選擇 | 由目前工作階段與 Codex 自動選擇 | 依目前選取的模型或 Auto | 依產品可用性而定 |
 | 專案規則 | `AGENTS.md` | `AGENTS.md` | `AGENTS.md` / Copilot instructions | Copilot instructions |
 
-## 角色與模型
+## 角色與模型設定
 
-| Agent | Codex 模型 | Reasoning | 職責 |
-|---|---|---:|---|
-| `orchestration_planner` | `gpt-5.6-sol` | `high` | 拆解需求、驗證路徑、定義驗收條件與依賴 |
-| `orchestration_explorer` | `gpt-5.6-luna` | `medium` | 快速搜尋、追蹤呼叫鏈、整理現有模式 |
-| `orchestration_implementer` | `gpt-5.6-terra` | `high` | 執行單一已核准子任務並自我驗證 |
-| `orchestration_verifier` | `gpt-5.6-sol` | `high` | 獨立檢查完整變更並執行實際測試 |
+| Agent | 模型設定 | 職責 |
+|---|---|---|
+| `orchestration_planner` | 不釘選 `model` 或 `model_reasoning_effort` | 拆解需求、驗證路徑、定義驗收條件與依賴 |
+| `orchestration_explorer` | 不釘選 `model` 或 `model_reasoning_effort` | 快速搜尋、追蹤呼叫鏈、整理現有模式 |
+| `orchestration_implementer` | 不釘選 `model` 或 `model_reasoning_effort` | 執行單一已核准子任務並自我驗證 |
+| `orchestration_verifier` | 不釘選 `model` 或 `model_reasoning_effort` | 獨立檢查完整變更並執行實際測試 |
 
-Copilot agents 不指定 `model`，會繼承目前選取的模型或 Auto，不會引用 Copilot 尚未提供的 GPT-5.6 模型 ID
+Codex custom agent 未釘選模型與推理強度時，會使用目前父工作階段的設定，或由 Codex 依任務選擇可用的設定。主代理仍決定角色、子任務與派發時機，但無法預先查詢特定服務端模型是否有容量。Copilot agents 同樣不指定 `model`，會繼承目前選取的模型或 Auto
 
 ## 工作流程
 
 1. planner 檢查實際專案並產生含驗收條件的計畫
 2. 主代理向使用者顯示計畫並等待明確核准
 3. explorer 針對仍不清楚的程式路徑補充證據
-4. implementer 各自處理一個界線明確的子任務
-5. 無相依且不共用檔案的子任務才會平行執行
-6. verifier 以獨立 context 檢查完整變更並親自執行測試
-7. 驗收失敗時只修正阻擋項目，最多進行兩次修正循環
+4. 主代理先檢查仍在執行的子代理數與子任務相依關係
+5. 每批最多派發兩個不共用檔案且無相依的 implementer，額度用完時等待既有工作完成
+6. implementer 各自處理一個界線明確的子任務
+7. 若派發收到 `Selected model is at capacity` 或等效的暫時性子代理可用性錯誤，主代理會在 30 秒、90 秒後，以原角色與未變更的子任務各重派一次
+8. 兩次重派仍失敗時，回報原始錯誤與未完成子任務，不臆測可用模型、不自動 fallback，也不變更已核准範圍
+9. verifier 以獨立 context 檢查完整變更並親自執行測試
+10. 驗收失敗時只修正阻擋項目，最多進行兩次修正循環
 
 `AGENTS.md` 會在三個以上檔案或三個以上步驟的工作中要求使用這套流程
+
+本設定包不新增或設定 `.codex/config.toml`，因此沿用 Codex 預設的 agent thread 上限。每批兩個 implementer 是工作流程的派發規則，並非服務端模型容量預查
 
 ## 專案結構
 
@@ -118,19 +123,11 @@ Codex CLI 與 Copilot CLI 都可以使用 `/agent` 查看或切換 custom agent
 - Copilot planner、explorer、verifier 不提供 `edit` 工具
 - 子代理仍受父工作階段的核准與 sandbox 規則約束
 
-## GPT-5.6 權限與替代模型
+## 模型可用性與容量
 
-GPT-5.6 Sol、Terra、Luna 目前屬於限量預覽，沒有權限時 Codex 會回報模型不可用，本設定包不會靜默降級
+此設定包不指定 GPT-5.6、Spark 或其他具名模型作為預設或 fallback。模型是否可用、容量是否足夠，皆由目前工作階段與服務端決定，沒有可在派發前使用的服務端容量預查
 
-可依帳號實際支援狀況手動調整 `.codex/agents/*.toml`：
-
-| 原角色 | 建議替代模型 |
-|---|---|
-| planner、verifier 的 `gpt-5.6-sol` | `gpt-5.4` 或帳號中目前最強的 coding model |
-| implementer 的 `gpt-5.6-terra` | `gpt-5.4` 或 `gpt-5.4-mini` |
-| explorer 的 `gpt-5.6-luna` | `gpt-5.4-mini`，Pro 帳號也可考慮 `gpt-5.3-codex-spark` |
-
-修改模型後重新啟動 Codex，或開啟新的工作階段確認設定已載入
+容量錯誤的處理方式僅限於工作流程中的兩次原任務重派。若仍無法建立子代理，會保留原始錯誤並回報未完成項目，不會靜默改派其他模型
 
 ## 設計依據
 

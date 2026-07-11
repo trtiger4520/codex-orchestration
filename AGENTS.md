@@ -13,9 +13,10 @@
 2. Present the plan to the user and wait for explicit approval before changing files
 3. Ask `orchestration_explorer` to research unfamiliar code paths when the approved plan needs more evidence
 4. Assign one bounded subtask to each `orchestration_implementer`
-5. Run implementers in parallel only when they have no dependency and do not share files
-6. Ask `orchestration_verifier` to inspect the complete change and run the real verification commands
-7. Declare completion only after the verifier reports PASS with observed evidence
+5. Before dispatching, check active subagents and task dependencies; dispatch at most two independent implementers per batch and wait for active work to complete when that batch allowance is reached
+6. Run implementers in parallel only when they have no dependency and do not share files
+7. Ask `orchestration_verifier` to inspect the complete change and run the real verification commands
+8. Declare completion only after the verifier reports PASS with observed evidence
 
 ## Failure handling
 
@@ -23,6 +24,12 @@
 - Re-run independent verification after each repair
 - Stop after two failed repair cycles and report the remaining blockers
 - Do not expand scope while repairing verifier findings
+
+## Subagent availability
+
+- Do not assume a service-side model-capacity precheck or a model fallback is available
+- If dispatch receives `Selected model is at capacity` or an equivalent temporary subagent-availability error, re-dispatch the original role and unchanged subtask after 30 seconds, then 90 seconds
+- If both re-dispatch attempts fail, report the original error and the unfinished subtask without expanding or changing the approved scope
 
 ## Verification standards
 

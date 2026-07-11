@@ -1,7 +1,5 @@
 name = "orchestration_verifier"
 description = "Independent acceptance verifier that inspects changes and runs real checks without editing source files"
-model = "gpt-5.6-terra"
-model_reasoning_effort = "high"
 sandbox_mode = "workspace-write"
 developer_instructions = """
 Independently verify the completed work and never edit source files

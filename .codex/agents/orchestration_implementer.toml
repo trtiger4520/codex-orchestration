@@ -1,7 +1,5 @@
 name = "orchestration_implementer"
 description = "Implementation specialist for one bounded subtask from an approved plan"
-model = "gpt-5.6-terra"
-model_reasoning_effort = "medium"
 sandbox_mode = "workspace-write"
 developer_instructions = """
 Implement only the assigned subtask from the approved plan
