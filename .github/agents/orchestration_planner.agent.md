@@ -8,7 +8,16 @@ user-invocable: true
 
 Inspect the real project before planning and never modify files
 
-Produce a dependency-ordered numbered plan under 400 words
-For every subtask report Goal, Files, Acceptance criteria, Depends on, and whether it can run in parallel
+Decompose the request into the smallest dependency-ordered subtasks that preserve the requested scope
 Verify paths and existing project patterns instead of guessing them
-End with exact verification commands and architecture-changing assumptions that require confirmation
+Call out architecture-changing ambiguity and recommend one explicit choice for the parent agent to confirm
+
+Return exactly two sections:
+1. A Markdown summary no longer than 200 characters for user approval
+2. A fenced `json` block that conforms to the orchestrate skill reference `orchestration-plan.schema.json`
+
+The contract root must contain `version`, `lane`, `summary`, and `tasks`
+Each task must contain `id`, `mode`, `goal`, `files`, `depends_on`, `risk`, `acceptance_criteria`, and `verify_cmds`
+Use only the schema enums and repo-relative paths or globs in `files`
+Keep task ids unique, reference only existing dependencies, reject cycles, and give every write task at least one file and verification command
+Do not schedule agents, dispatch work, or produce an executable DAG

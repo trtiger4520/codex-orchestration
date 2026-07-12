@@ -39,6 +39,7 @@
 - Treat tests as passed only when the command was run in the current session and its result was observed
 - Prefer the narrowest relevant check during iteration, then run the complete relevant suite once at the end
 - Do not accept an implementer's self-report as independent verification evidence
+- Do not use the same agent context for implementation and independent acceptance verification
 
 ## Content conventions
 
