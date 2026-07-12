@@ -39,8 +39,3 @@
 - Treat tests as passed only when the command was run in the current session and its result was observed
 - Prefer the narrowest relevant check during iteration, then run the complete relevant suite once at the end
 - Do not accept an implementer's self-report as independent verification evidence
-
-## Content conventions
-
-- Do not end comments, commit messages, or pull request messages with the Chinese full stop `。`
-- Do not add `Co-Authored-By` trailers to commits
