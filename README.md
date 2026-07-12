@@ -58,9 +58,10 @@ Codex custom agent 未釘選模型與推理強度時，會使用目前父工作�
 ├── .github/agents/                GitHub Copilot agents
 ├── .github/copilot-instructions.md
 ├── .github/copilot-user-instructions.md
-├── tests/                          零外部相依的 PowerShell 7 tests
+├── tests/                          PowerShell 與 Bash 安裝器測試
 ├── AGENTS.md
 ├── install.ps1
+├── install.sh
 └── README.md
 ```
 
@@ -68,7 +69,9 @@ Codex custom agent 未釘選模型與推理強度時，會使用目前父工作�
 
 ## 安裝
 
-需要 PowerShell 7 以上版本
+Windows 需要 PowerShell 7 以上版本
+
+macOS 與 Linux 需要 Bash 3.2 以上版本，以及 `shasum` 或 `sha256sum`。macOS 內建 Bash 可直接使用
 
 ### 安裝到個人環境
 
@@ -78,11 +81,22 @@ Codex custom agent 未釘選模型與推理強度時，會使用目前父工作�
 pwsh ./install.ps1
 ```
 
+macOS 與 Linux：
+
+```bash
+bash ./install.sh
+```
+
 也可以只安裝指定平台
 
 ```powershell
 pwsh ./install.ps1 -Scope User -Platform Codex
 pwsh ./install.ps1 -Scope User -Platform Copilot
+```
+
+```bash
+bash ./install.sh --scope user --platform codex
+bash ./install.sh --scope user --platform copilot
 ```
 
 個人安裝位置：
@@ -101,6 +115,10 @@ User Scope 的 Copilot instructions 會安裝完整自包含規則，不依賴�
 pwsh ./install.ps1 -Scope Project -Platform All -ProjectPath C:\src\my-project
 ```
 
+```bash
+bash ./install.sh --scope project --platform all --project-path ~/src/my-project
+```
+
 安裝器只管理本設定包的 agent 與 skill 檔案，既有指令檔以標記區塊合併，不會整份覆蓋
 
 遇到同名但內容不同的受管理檔案時會停止，確認後可使用 `-Force` 覆寫受管理檔案或更新受管理區塊
@@ -109,6 +127,10 @@ pwsh ./install.ps1 -Scope Project -Platform All -ProjectPath C:\src\my-project
 
 ```powershell
 pwsh ./install.ps1 -Scope Project -Platform All -ProjectPath C:\src\my-project -Check
+```
+
+```bash
+bash ./install.sh --scope project --platform all --project-path ~/src/my-project --check
 ```
 
 ## 使用方式
