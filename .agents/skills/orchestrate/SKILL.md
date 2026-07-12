@@ -12,7 +12,8 @@ Coordinate the parent task while keeping planning, implementation, and verificat
 1. Send the complete request to `orchestration_planner`
 2. Review the returned Markdown summary and JSON task contract for verified paths, dependencies, and observable acceptance criteria
    - Read `references/orchestration-plan.schema.json` when inspecting or producing the contract
-   - Run `scripts/Test-OrchestrationPlan.ps1 -PlanFile <path>` when a contract is materialized as JSON
+   - On PowerShell, run `scripts/Test-OrchestrationPlan.ps1 -PlanFile <path>` when a contract is materialized as JSON
+   - On Bash, run `scripts/Test-OrchestrationPlan.sh --plan-file <path>` when a contract is materialized as JSON
 3. Present the plan to the user and stop until the user explicitly approves it
 4. After approval, send unanswered codebase questions to `orchestration_explorer`
 5. Before dispatching, check active subagents, available slots, task mode, risk, dependencies, and file-conflict clusters

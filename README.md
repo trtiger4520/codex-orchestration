@@ -58,7 +58,7 @@ Codex custom agent 未釘選模型與推理強度時，會使用目前父工作�
 ├── .github/agents/                GitHub Copilot agents
 ├── .github/copilot-instructions.md
 ├── .github/copilot-user-instructions.md
-├── tests/                          PowerShell 與 Bash 安裝器測試
+├── tests/                          PowerShell 與 Bash 的安裝器及 contract 測試
 ├── AGENTS.md
 ├── install.ps1
 ├── install.sh
@@ -72,6 +72,8 @@ Codex custom agent 未釘選模型與推理強度時，會使用目前父工作�
 Windows 需要 PowerShell 7 以上版本
 
 macOS 與 Linux 需要 Bash 3.2 以上版本，以及 `shasum` 或 `sha256sum`。macOS 內建 Bash 可直接使用
+
+在 Bash 環境驗證 orchestration plan 時，另需 Python 3；validator 僅使用 Python 標準函式庫，不需要安裝套件
 
 ### 安裝到個人環境
 
@@ -151,10 +153,23 @@ planner 的 fenced JSON contract 使用 `.agents/skills/orchestrate/references/o
 pwsh ./.agents/skills/orchestrate/scripts/Test-OrchestrationPlan.ps1 -PlanFile ./plan.json
 ```
 
+macOS 與 Linux：
+
+```bash
+bash ./.agents/skills/orchestrate/scripts/Test-OrchestrationPlan.sh --plan-file ./plan.json
+```
+
 執行完整套件測試：
 
 ```powershell
 pwsh ./tests/Test-Package.ps1
+```
+
+在 macOS 與 Linux，可執行 Bash installer 與 contract 測試：
+
+```bash
+bash ./tests/Test-Installer.sh
+bash ./tests/Test-Contract.sh
 ```
 
 ### 獨立驗收
