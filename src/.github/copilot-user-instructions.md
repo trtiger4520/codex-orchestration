@@ -1,9 +1,13 @@
 # Multi-agent orchestration rules
 
-## Trigger and ownership
+## Lane selection and ownership
 
-- Classify each task before delegating: use `single-agent` for routine low-risk work in familiar paths, `plan-light` when a short plan is useful without full role separation, and `orchestrate-heavy` for high-risk work, cross-module changes, unfamiliar paths, independent verification needs, or explicit user requests for orchestration
-- Treat file count and step count as planning signals, not automatic triggers for full orchestration
+- Classify each task before delegating
+- Use `single-agent` for routine low-risk work the main agent can complete directly; do not create a subagent or wait for plan approval
+- Use `plan-light` by default for non-high-risk work across files, modules, platforms, or unfamiliar paths; the main agent owns a short plan, does not wait for approval unless the user asks, and may assign at most one cohesive delivery unit to one implementer
+- A request for independent verification alone may add only a verifier
+- Use `orchestrate-heavy` only for an explicitly requested complete workflow, security, data migration, production deployment, core architecture, or a breaking public contract
+- File count, step count, cross-module scope, cross-platform scope, and unfamiliar paths must not trigger `orchestrate-heavy` by themselves
 - When the current surface explicitly provides native dynamic delegation and the user did not request this workflow, allow the native capability to lead; do not claim or implement automatic detection of a named Ultra mode
 - Keep the main agent responsible for user communication, plan approval, delegation, integration, and the final report
 - Use `orchestration_explorer` for broad code search or call-chain tracing instead of adding raw search output to the main context
@@ -15,21 +19,18 @@
 - On task completion, report `子代理結果：<已派發，角色與任務：... | 未派發，未使用或派發失敗原因：...>`
 - When no subagent was used, state the reason in `未使用或派發失敗原因`; when dispatch failed, state the observed failure reason and any retry outcome
 
-## Workflow
+## Dispatch and workflow
 
-1. Ask `orchestration_planner` to inspect the actual project and produce a Markdown summary plus a valid declarative task contract with acceptance criteria
-2. Present the plan to the user and wait for explicit approval before changing files
-3. Ask `orchestration_explorer` to research unfamiliar code paths when the approved plan needs more evidence
-4. Assign one bounded subtask to each `orchestration_implementer`
-5. Before dispatching, check active subagents, available slots, task mode, risk, dependencies, and file conflicts
-6. Use currently available slots for independent read-only planner or explorer tasks; keep write work to at most two implementers, use one writer for high-risk work, and serialize tasks in the same file-conflict cluster
-7. Ask `orchestration_verifier` to inspect the complete change and run the real verification commands
-8. Declare completion only after the verifier reports PASS with observed evidence
+1. Before dispatching, confirm the operating system and required PowerShell, Bash, Python, or bundled runtime tools
+2. Prefer native subagent tools and event-driven waiting; never wrap subagent waiting in general `exec`; otherwise poll every 30 to 60 seconds and report only state changes
+3. For `plan-light`, use no more than one cohesive implementer and keep product code, tests, and documentation together when they form one delivery unit
+4. For `orchestrate-heavy`, ask planner for cohesive delivery units, present the plan for explicit approval, check available slots, use explorer only for unanswered code-path questions, use the minimum writers and at most two writers, and finish with one independent verifier
 
 ## Failure handling
 
-- When verification reports FAIL, return only the blocking items to an implementer
-- Re-run independent verification after each repair
+- When verification reports FAIL, return only blocking items to the original implementer context and reuse the same independent verifier context
+- After each repair, run only failed checks; run the complete relevant suite once after all blockers clear
+- Treat test naming, formatting preferences, and traceability concerns with equivalent existing coverage as non-blocking notes
 - Stop after two failed repair cycles and report the remaining blockers
 - Do not expand scope while repairing verifier findings
 

@@ -13,14 +13,14 @@
 
 ## 角色與模型設定
 
-| Agent | 模型設定 | 職責 |
-|---|---|---|
-| `orchestration_planner` | 預設繼承，不寫入 `model`；可手動指定 | 拆解需求、驗證路徑、定義驗收條件與依賴 |
-| `orchestration_explorer` | 預設 `5.6-luna`；可手動指定或改為繼承 | 快速搜尋、追蹤呼叫鏈、整理現有模式 |
-| `orchestration_implementer` | 預設 `5.6-luna`；可手動指定或改為繼承 | 執行單一已核准子任務並自我驗證 |
-| `orchestration_verifier` | 預設繼承，不寫入 `model`；可手動指定 | 獨立檢查完整變更並執行實際測試 |
+| Agent | 模型設定 | Reasoning | 職責 |
+|---|---|---|---|
+| `orchestration_planner` | 預設繼承，不寫入 `model`；可手動指定 | `medium` | 產生以完整交付單元分組的計畫與驗收條件 |
+| `orchestration_explorer` | 預設 `5.6-luna`；可手動指定或改為繼承 | `low` | 快速搜尋、追蹤呼叫鏈、整理現有模式 |
+| `orchestration_implementer` | 預設 `5.6-luna`；可手動指定或改為繼承 | `medium` | 完成一個 cohesive delivery unit 並執行窄範圍驗證 |
+| `orchestration_verifier` | 預設繼承，不寫入 `model`；可手動指定 | `high` | 獨立檢查完整變更並執行實際測試 |
 
-Codex custom agent 的 `model_reasoning_effort` 始終不由本設定包釘選。模型欄位由安裝器依互動設定寫入，使用 `inherit` 時會省略 Codex TOML 的 `model` 與 Copilot agent front matter 的 `model`，交由目前父工作階段、目前選取的模型或產品設定處理
+Codex custom agent 固定使用表中的 `model_reasoning_effort`，避免所有角色繼承父工作階段的高推理強度；安裝器仍只依互動設定轉換 `model`，不擴充 sidecar；使用 `inherit` 時會省略 Codex TOML 與 Copilot front matter 的 `model`；Copilot agent 不加入未確認支援的 reasoning 欄位
 
 非 `-Check` 安裝會依序詢問 planner、explorer、implementer、verifier 的模型。提示中的 `Enter=default` 會採用該角色預設值，輸入 `inherit` 會省略模型欄位，也可以直接輸入自訂模型名稱。安裝器不接受空白模型名稱或包含換行的輸入
 
@@ -30,11 +30,11 @@ Codex custom agent 的 `model_reasoning_effort` 始終不由本設定包釘選�
 
 主代理先依風險與協作需求選擇執行 lane：
 
-- `single-agent`：熟悉路徑中的日常低風險工作
-- `plan-light`：需要簡短規劃，但不需要完整角色分離
-- `orchestrate-heavy`：高風險、跨模組、陌生路徑、需要獨立驗收，或使用者明確要求完整協作
+- `single-agent`：主代理可直接完成的日常低風險工作，不建立子代理，也不等待計畫核准
+- `plan-light`：一般非高風險工作的預設，包括跨檔案、跨模組、跨平台或陌生路徑；由主代理提出短計畫，除非使用者要求，否則不等待核准，最多派一個 implementer 完成同一交付單元
+- `orchestrate-heavy`：僅限使用者明確要求完整協作，或涉及安全、資料遷移、正式部署、核心架構、破壞性公開契約的高風險工作
 
-檔案數與步驟數只作為評估訊號，不會單獨觸發完整流程。若目前介面明確提供原生動態委派且未指定 `$orchestrate`，主代理可優先使用原生能力；本設定包不偵測或假設特定 Ultra 模式
+檔案數、步驟數、跨模組、跨平台與陌生路徑都不會單獨觸發完整流程；單獨要求獨立驗證時只需增加 verifier，不強制建立其他角色
 
 ### 子代理使用回報
 
@@ -54,16 +54,18 @@ Codex custom agent 的 `model_reasoning_effort` 始終不由本設定包釘選�
 
 `orchestrate-heavy` 流程如下：
 
-1. planner 檢查實際專案，產生 200 字內 Markdown 摘要及符合 schema 的 JSON task contract
-2. 主代理向使用者顯示計畫並等待明確核准
-3. explorer 針對仍不清楚的程式路徑補充證據
-4. 主代理檢查可用 slots、task mode、風險、相依關係與檔案衝突
-5. 無相依的唯讀工作使用當下可用 slots；寫入工作最多兩個，高風險工作固定單 writer，同一 conflict cluster 依序執行
-6. implementer 各自處理一個界線明確且已核准的子任務
+1. 派發前確認作業系統，以及 PowerShell、Bash、Python 或 bundled runtime 等驗證工具鏈
+2. planner 檢查實際專案，產生 200 字內 Markdown 摘要及符合 schema 的 JSON task contract，並按 cohesive delivery unit 分組，不機械拆分產品碼、測試與文件
+3. 主代理向使用者顯示計畫並等待明確核准
+4. explorer 只針對仍不清楚的程式路徑補充證據
+5. 主代理檢查可用 slots、風險、相依關係與檔案衝突，使用最少 writers 且最多兩個，高風險工作固定單 writer
+6. implementer 各自處理一個完整且已核准的交付單元
 7. 若派發收到 `Selected model is at capacity` 或等效的暫時性子代理可用性錯誤，主代理會在 30 秒、90 秒後，以原角色與未變更的子任務各重派一次
 8. 兩次重派仍失敗時，回報原始錯誤與未完成子任務，不臆測可用模型、不自動 fallback，也不變更已核准範圍
-9. verifier 以獨立 context 檢查完整變更並親自執行測試
-10. 驗收失敗時只修正阻擋項目，最多進行兩次修正循環
+9. verifier 以單一獨立 context 檢查完整變更並親自執行測試
+10. 驗收失敗時交回原 implementer context，並由同一 verifier context 複驗；每次只重跑失敗檢查，blocker 清除後完整套件只執行一次，最多兩次修正循環
+
+子代理協調優先使用介面原生工具與事件式等待，不把等待包進一般 `exec`；介面沒有事件式等待時，每 30 至 60 秒檢查一次，只有狀態變化才回報；測試命名、格式偏好或已有等效覆蓋的追溯性意見列為 non-blocking note
 
 本設定包不新增或設定 `.codex/config.toml`，因此沿用目前介面的 agent thread 上限。動態 read 併發與最多兩個 writers 都是工作流程規則，不是服務端容量預查，也不會為提高併發指定模型或修改 thread 上限
 
@@ -149,6 +151,10 @@ bash ./install.sh --scope project --platform all --project-path ~/src/my-project
 安裝器只管理本設定包的 agent 與 skill 檔案，既有指令檔以標記區塊合併，不會整份覆蓋
 
 遇到同名但內容不同的受管理檔案時會停止，確認後可使用 `-Force` 覆寫受管理檔案或更新受管理區塊
+
+既有安裝需重新執行安裝器並使用 `-Force`，才會取得新的 lane 政策與 reasoning 預設
+
+Project Scope 安裝 Codex 或 All 時，若 `$CODEX_HOME/AGENTS.md` 或 `$HOME/.codex/AGENTS.md` 已包含本設定包的 managed marker，安裝器會輸出 `WARN  Duplicate managed orchestration instructions ...`；警告不修改全域檔案、不算 drift，也不改變 `-Check` exit code；建議每個 repository 只在 User 或 Project 其中一層保存完整規則
 
 使用 `-Check` 可唯讀檢查受管理 agent、skill、schema、validator 與 instruction block 是否缺少、不同或標記損壞。檢查會列出所有 drift 並以非零 exit code 結束，不會建立或更新檔案；`-Check` 不可與 `-Force` 同時使用
 

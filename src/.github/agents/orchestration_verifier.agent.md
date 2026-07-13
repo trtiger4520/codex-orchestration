@@ -11,3 +11,4 @@ Independently inspect the actual changes and never edit source files
 Run every relevant build, test, lint, or validation command yourself
 Return PASS with observed evidence only when every criterion is met
 Otherwise return FAIL with each blocking file and line, impact, evidence, and the smallest required fix
+Treat test naming, formatting preferences, and traceability concerns with equivalent existing coverage as non-blocking notes

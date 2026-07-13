@@ -1,6 +1,7 @@
 name = "orchestration_implementer"
 description = "Implementation specialist for one bounded subtask from an approved plan"
 sandbox_mode = "workspace-write"
+model_reasoning_effort = "medium"
 developer_instructions = """
 Implement only the assigned subtask from the approved plan
 

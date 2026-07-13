@@ -476,6 +476,32 @@ function Get-MarkerState {
     return "Valid"
 }
 
+function Write-DuplicateScopeWarning {
+    if (-not $installCodex -or $Scope -ne "Project") {
+        return
+    }
+
+    $userHome = if ([string]::IsNullOrWhiteSpace($env:HOME)) { $HOME } else { $env:HOME }
+    if ([string]::IsNullOrWhiteSpace($env:CODEX_HOME)) {
+        if ([string]::IsNullOrWhiteSpace($userHome)) {
+            return
+        }
+        $globalAgentsPath = Join-Path $userHome ".codex/AGENTS.md"
+    }
+    else {
+        $globalAgentsPath = Join-Path $env:CODEX_HOME "AGENTS.md"
+    }
+
+    if (-not (Test-Path -LiteralPath $globalAgentsPath -PathType Leaf)) {
+        return
+    }
+
+    $globalContent = Get-Content -Raw -Encoding utf8 -LiteralPath $globalAgentsPath
+    if ($globalContent.Contains($startMarker) -or $globalContent.Contains($endMarker)) {
+        Write-Host "WARN  Duplicate managed orchestration instructions found in $globalAgentsPath; keep the complete rules in either User or Project scope"
+    }
+}
+
 function Get-ManagedBlock {
     param(
         [Parameter(Mandatory)]
@@ -593,6 +619,7 @@ if ($Scope -eq "Project") {
     }
 
     $targetRoot = (Resolve-Path -LiteralPath $ProjectPath).Path
+    Write-DuplicateScopeWarning
     $modelSidecar = Join-Path $targetRoot ".codex-orchestration-models.json"
     $modelSettings = Read-ModelSettings -SidecarPath $modelSidecar -Interactive (-not $Check)
 

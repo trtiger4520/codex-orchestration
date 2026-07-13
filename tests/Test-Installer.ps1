@@ -112,6 +112,14 @@ try {
             Assert-True ($copilot -notmatch '(?m)^model\s*:') "Inherited Copilot model was written for $role"
         }
 
+        $reasoningByRole = @{ planner = "medium"; explorer = "low"; implementer = "medium"; verifier = "high" }
+        foreach ($role in $reasoningByRole.Keys) {
+            $codex = Get-Content -Raw -Encoding utf8 -LiteralPath (Join-Path $project ".codex/agents/orchestration_$role.toml")
+            $copilot = Get-Content -Raw -Encoding utf8 -LiteralPath (Join-Path $project ".github/agents/orchestration_$role.agent.md")
+            Assert-True ($codex.Contains('model_reasoning_effort = "' + $reasoningByRole[$role] + '"')) "Codex reasoning effort was not preserved for $role"
+            Assert-True (-not $copilot.Contains("model_reasoning_effort")) "Copilot reasoning effort was unexpectedly written for $role"
+        }
+
         foreach ($role in @("explorer", "implementer")) {
             $codex = Get-Content -Raw -Encoding utf8 -LiteralPath (Join-Path $project ".codex/agents/orchestration_$role.toml")
             $copilot = Get-Content -Raw -Encoding utf8 -LiteralPath (Join-Path $project ".github/agents/orchestration_$role.agent.md")
@@ -136,6 +144,7 @@ try {
             $expectedCopilot = 'model: "' + "custom-$role" + '"'
             Assert-True ($codex.Contains($expectedCodex)) "Custom Codex model was not written for $role"
             Assert-True ($copilot.Contains($expectedCopilot)) "Custom Copilot model was not written for $role"
+            Assert-True ($codex -match '(?m)^model_reasoning_effort\s*=\s*"(low|medium|high)"$') "Custom model rendering removed reasoning effort for $role"
         }
 
         $before = Get-TreeSnapshot -Path $project
@@ -223,6 +232,48 @@ try {
         $check = Invoke-Installer -Arguments @("-Scope", "Project", "-Platform", "Codex", "-ProjectPath", $project, "-Check")
         Assert-True ($check.ExitCode -ne 0) "Malformed marker check unexpectedly succeeded"
         Assert-True (($check.Output | Select-String -SimpleMatch "DRIFT [MalformedMarker]" -Quiet)) "Malformed marker drift was not reported"
+    }
+
+    Invoke-Test "Project Codex duplicate scope warning is non-blocking and read-only" {
+        $project = Join-Path $testRoot "duplicate-scope"
+        $homePath = Join-Path $testRoot "duplicate-home"
+        $codexHome = Join-Path $homePath ".codex"
+        New-Item -ItemType Directory -Force -Path $project, $codexHome | Out-Null
+        $globalAgents = Join-Path $codexHome "AGENTS.md"
+        $globalContent = "before`n<!-- codex-multi-agent-orchestration:start -->`nrules`n<!-- codex-multi-agent-orchestration:end -->`nafter"
+        Set-Content -Encoding utf8 -NoNewline -LiteralPath $globalAgents -Value $globalContent
+        $globalHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $globalAgents).Hash
+
+        $oldHome = $env:HOME
+        $oldCodexHome = $env:CODEX_HOME
+        try {
+            $env:HOME = $homePath
+            $env:CODEX_HOME = $codexHome
+            $install = Invoke-Installer -Arguments @("-Scope", "Project", "-Platform", "Codex", "-ProjectPath", $project)
+            Assert-True ($install.ExitCode -eq 0) $install.Output
+            Assert-True ($install.Output.Contains("WARN  Duplicate managed orchestration instructions")) "Project install did not warn about duplicate scope"
+            Assert-True ((Get-FileHash -Algorithm SHA256 -LiteralPath $globalAgents).Hash -eq $globalHash) "Project install changed global AGENTS.md"
+
+            $check = Invoke-Installer -Arguments @("-Scope", "Project", "-Platform", "Codex", "-ProjectPath", $project, "-Check") -ModelInputs $null
+            Assert-True ($check.ExitCode -eq 0) "Duplicate scope warning changed Check result: $($check.Output)"
+            Assert-True ($check.Output.Contains("WARN  Duplicate managed orchestration instructions")) "Project Check did not warn about duplicate scope"
+            Assert-True ((Get-FileHash -Algorithm SHA256 -LiteralPath $globalAgents).Hash -eq $globalHash) "Project Check changed global AGENTS.md"
+
+            Remove-Item -LiteralPath $globalAgents
+            $noMarker = Invoke-Installer -Arguments @("-Scope", "Project", "-Platform", "Codex", "-ProjectPath", $project, "-Check") -ModelInputs $null
+            Assert-True (-not $noMarker.Output.Contains("WARN  Duplicate managed orchestration instructions")) "Warning appeared without a global managed marker"
+
+            Set-Content -Encoding utf8 -NoNewline -LiteralPath $globalAgents -Value $globalContent
+            $copilot = Join-Path $testRoot "duplicate-copilot-only"
+            New-Item -ItemType Directory -Force -Path $copilot | Out-Null
+            $copilotInstall = Invoke-Installer -Arguments @("-Scope", "Project", "-Platform", "Copilot", "-ProjectPath", $copilot)
+            Assert-True ($copilotInstall.ExitCode -eq 0) $copilotInstall.Output
+            Assert-True (-not $copilotInstall.Output.Contains("WARN  Duplicate managed orchestration instructions")) "Copilot-only install emitted a Codex scope warning"
+        }
+        finally {
+            $env:HOME = $oldHome
+            $env:CODEX_HOME = $oldCodexHome
+        }
     }
 
     Invoke-Test "User scope isolates homes and installs self-contained Copilot instructions" {

@@ -50,6 +50,22 @@ foreach ($content in @($agents, $skill, $copilotUser)) {
     Assert-Contains -Content $content -Expected "未使用或派發失敗原因" -Context "Subagent usage outcome"
 }
 
+foreach ($expected in @(
+    "do not create a subagent or wait for plan approval",
+    "at most one cohesive delivery unit",
+    "independent verification alone may add only",
+    "security, data migration, production deployment, core architecture, or a breaking public contract",
+    'must not trigger `orchestrate-heavy` by themselves',
+    "event-driven waiting",
+    "30 to 60 seconds",
+    "original implementer context",
+    "same independent verifier context",
+    "complete relevant suite once",
+    "non-blocking notes"
+)) {
+    Assert-Contains -Content $agents -Expected $expected -Context "Optimized orchestration policy"
+}
+
 Assert-Contains -Content $readme -Expected "可用 slots" -Context "README concurrency policy"
 Assert-Contains -Content $readme -Expected "最多兩個" -Context "README writer limit"
 Assert-Contains -Content $readme -Expected "30 秒" -Context "README capacity retry"
@@ -65,11 +81,19 @@ Assert-Contains -Content $openAiMetadata -Expected "allow_implicit_invocation: f
 Assert-Contains -Content $copilotUser -Expected "Do not use the same agent context" -Context "Copilot user instructions"
 
 $codexAgentFiles = Get-ChildItem -LiteralPath (Join-Path $sourceRoot ".codex\agents") -Filter "*.toml" -File
+$reasoningByRole = @{
+    planner = "medium"
+    explorer = "low"
+    implementer = "medium"
+    verifier = "high"
+}
 foreach ($agentFile in $codexAgentFiles) {
     $content = Get-Content -Raw -LiteralPath $agentFile.FullName
-    if ($content -match '(?m)^\s*(model|model_reasoning_effort)\s*=') {
-        throw "Codex agent pins a model setting: $($agentFile.FullName)"
+    if ($content -match '(?m)^\s*model\s*=') {
+        throw "Codex agent pins a model: $($agentFile.FullName)"
     }
+    $role = $agentFile.BaseName.Substring("orchestration_".Length)
+    Assert-Contains -Content $content -Expected ('model_reasoning_effort = "' + $reasoningByRole[$role] + '"') -Context "Codex $role reasoning effort"
 }
 
 $copilotAgentFiles = Get-ChildItem -LiteralPath (Join-Path $sourceRoot ".github\agents") -Filter "*.agent.md" -File

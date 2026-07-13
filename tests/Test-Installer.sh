@@ -61,11 +61,15 @@ run_python_test() {
     run_test "$name" "$@"
 }
 
+run_installer_defaults() {
+    printf '\n\n\n\n' | bash "$installer" "$@"
+}
+
 fresh_project_install() {
     platform=$1
     project="$test_root/project-$platform"
     mkdir -p "$project"
-    bash "$installer" --scope project --platform "$platform" --project-path "$project"
+    run_installer_defaults --scope project --platform "$platform" --project-path "$project"
     before=$(snapshot "$project")
     bash "$installer" --scope project --platform "$platform" --project-path "$project" --check
     after=$(snapshot "$project")
@@ -91,6 +95,12 @@ check_model_defaults() {
         grep -F 'model = "5.6-luna"' "$project/.codex/agents/orchestration_$role.toml" >/dev/null
         grep -F 'model: "5.6-luna"' "$project/.github/agents/orchestration_$role.agent.md" >/dev/null
     done
+
+    grep -F 'model_reasoning_effort = "medium"' "$project/.codex/agents/orchestration_planner.toml" >/dev/null
+    grep -F 'model_reasoning_effort = "low"' "$project/.codex/agents/orchestration_explorer.toml" >/dev/null
+    grep -F 'model_reasoning_effort = "medium"' "$project/.codex/agents/orchestration_implementer.toml" >/dev/null
+    grep -F 'model_reasoning_effort = "high"' "$project/.codex/agents/orchestration_verifier.toml" >/dev/null
+    ! grep -R -F 'model_reasoning_effort' "$project/.github/agents" >/dev/null
 }
 run_python_test "model defaults and inherited agent settings" check_model_defaults
 
@@ -118,6 +128,7 @@ check_custom_models_and_read_only_check() {
         grep -F "\"$role\":\"custom-$role\"" "$project/.codex-orchestration-models.json" >/dev/null
         grep -F "model = \"custom-$role\"" "$project/.codex/agents/orchestration_$role.toml" >/dev/null
         grep -F "model: \"custom-$role\"" "$project/.github/agents/orchestration_$role.agent.md" >/dev/null
+        grep -E '^model_reasoning_effort = "(low|medium|high)"$' "$project/.codex/agents/orchestration_$role.toml" >/dev/null
     done
 
     before=$(snapshot "$project")
@@ -128,6 +139,35 @@ check_custom_models_and_read_only_check() {
     ! grep -F 'Model for ' "$check_output" >/dev/null
 }
 run_python_test "custom models are saved and Check is non-interactive and read-only" check_custom_models_and_read_only_check
+
+check_duplicate_scope_warning() {
+    project="$test_root/duplicate-scope"
+    home="$test_root/duplicate-home"
+    codex_home="$home/.codex"
+    mkdir -p "$project" "$codex_home"
+    global_agents="$codex_home/AGENTS.md"
+    printf '%s\n' 'before' '<!-- codex-multi-agent-orchestration:start -->' 'rules' '<!-- codex-multi-agent-orchestration:end -->' 'after' > "$global_agents"
+    before=$(snapshot "$codex_home")
+
+    HOME="$home" CODEX_HOME="$codex_home" run_installer_defaults --scope project --platform codex --project-path "$project" > "$test_root/duplicate-install-output" 2>&1
+    grep -F 'WARN  Duplicate managed orchestration instructions' "$test_root/duplicate-install-output" >/dev/null
+    [ "$before" = "$(snapshot "$codex_home")" ]
+
+    HOME="$home" CODEX_HOME="$codex_home" bash "$installer" --scope project --platform codex --project-path "$project" --check > "$test_root/duplicate-check-output" 2>&1
+    grep -F 'WARN  Duplicate managed orchestration instructions' "$test_root/duplicate-check-output" >/dev/null
+    [ "$before" = "$(snapshot "$codex_home")" ]
+
+    rm "$global_agents"
+    HOME="$home" CODEX_HOME="$codex_home" bash "$installer" --scope project --platform codex --project-path "$project" --check > "$test_root/no-duplicate-output" 2>&1
+    ! grep -F 'WARN  Duplicate managed orchestration instructions' "$test_root/no-duplicate-output" >/dev/null
+
+    printf '%s\n' '<!-- codex-multi-agent-orchestration:start -->' '<!-- codex-multi-agent-orchestration:end -->' > "$global_agents"
+    copilot_project="$test_root/duplicate-copilot-only"
+    mkdir -p "$copilot_project"
+    HOME="$home" CODEX_HOME="$codex_home" run_installer_defaults --scope project --platform copilot --project-path "$copilot_project" > "$test_root/copilot-only-output" 2>&1
+    ! grep -F 'WARN  Duplicate managed orchestration instructions' "$test_root/copilot-only-output" >/dev/null
+}
+run_python_test "Project duplicate scope warning is non-blocking and read-only" check_duplicate_scope_warning
 
 check_sidecar_errors() {
     for case_name in malformed invalid unknown-role; do
@@ -151,7 +191,7 @@ run_python_test "malformed and invalid model sidecars are rejected" check_sideca
 check_aggregates_drift() {
     project="$test_root/drift"
     mkdir -p "$project"
-    bash "$installer" --scope project --platform all --project-path "$project"
+    run_installer_defaults --scope project --platform all --project-path "$project"
     agent=$(find "$project/.codex/agents" -type f | head -n 1)
     printf 'drift\n' >> "$agent"
     if bash "$installer" --scope project --platform all --project-path "$project" --check > "$test_root/drift-output" 2>&1; then
@@ -166,7 +206,7 @@ user_scope_honors_homes() {
     codex_home="$test_root/codex-home"
     copilot_home="$test_root/copilot-home"
     mkdir -p "$user_home"
-    HOME="$user_home" CODEX_HOME="$codex_home" COPILOT_HOME="$copilot_home" bash "$installer" --scope user --platform all
+    HOME="$user_home" CODEX_HOME="$codex_home" COPILOT_HOME="$copilot_home" run_installer_defaults --scope user --platform all
     [ -d "$codex_home/agents" ] && [ -d "$copilot_home/agents" ] && [ -d "$user_home/.agents/skills" ]
     grep -F '# Multi-agent orchestration rules' "$copilot_home/copilot-instructions.md" >/dev/null
 }

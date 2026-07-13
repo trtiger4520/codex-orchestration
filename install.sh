@@ -280,8 +280,9 @@ Re-run with --force to overwrite this managed file"
 }
 
 copy_managed_tree() {
-    source_root=$1
-    destination_root=$2
+    local source_root=$1
+    local destination_root=$2
+    local source_file relative_path destination_file role temporary_file
 
     [ -d "$source_root" ] || fail "Source directory not found: $source_root"
 
@@ -318,8 +319,9 @@ test_managed_file() {
 }
 
 test_managed_tree() {
-    source_root=$1
-    destination_root=$2
+    local source_root=$1
+    local destination_root=$2
+    local source_file relative_path destination_file role
 
     [ -d "$source_root" ] || fail "Source directory not found: $source_root"
 
@@ -539,10 +541,30 @@ install_targets() {
     fi
 }
 
+warn_duplicate_scope() {
+    [ "$scope" = "project" ] || return 0
+    [ "$install_codex" -eq 1 ] || return 0
+
+    user_home=${HOME:-}
+    if [ -n "${CODEX_HOME:-}" ]; then
+        global_agents_path="$CODEX_HOME/AGENTS.md"
+    elif [ -n "$user_home" ]; then
+        global_agents_path="$user_home/.codex/AGENTS.md"
+    else
+        return 0
+    fi
+
+    [ -f "$global_agents_path" ] || return 0
+    if grep -F "$start_marker" "$global_agents_path" >/dev/null 2>&1 || grep -F "$end_marker" "$global_agents_path" >/dev/null 2>&1; then
+        printf 'WARN  Duplicate managed orchestration instructions found in %s; keep the complete rules in either User or Project scope\n' "$global_agents_path"
+    fi
+}
+
 if [ "$scope" = "project" ]; then
     [ -n "$project_path" ] || fail "--project-path is required when --scope project is selected"
     [ -d "$project_path" ] || fail "Project path not found: $project_path"
     target_root=$(CDPATH= cd -- "$project_path" && pwd -P)
+    warn_duplicate_scope
     model_sidecar="$target_root/.codex-orchestration-models.json"
     configure_models "$model_sidecar"
     install_targets "$target_root/AGENTS.md" "$target_root/.codex/agents" "$target_root/.github/copilot-instructions.md" "$target_root/.github/agents" "$target_root/.agents/skills"

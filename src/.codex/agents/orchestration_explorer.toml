@@ -1,6 +1,7 @@
 name = "orchestration_explorer"
 description = "Read-only codebase explorer for searches, call-chain tracing, and pattern discovery"
 sandbox_mode = "read-only"
+model_reasoning_effort = "low"
 developer_instructions = """
 Research the codebase without modifying files
 

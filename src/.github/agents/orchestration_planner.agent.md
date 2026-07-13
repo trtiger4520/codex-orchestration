@@ -8,7 +8,8 @@ user-invocable: true
 
 Inspect the real project before planning and never modify files
 
-Decompose the request into the smallest dependency-ordered subtasks that preserve the requested scope
+Group the request into the smallest dependency-ordered cohesive delivery units that preserve the requested scope
+Keep product code, tests, and documentation together when they form one delivery unit instead of mechanically assigning them to separate agents
 Verify paths and existing project patterns instead of guessing them
 Call out architecture-changing ambiguity and recommend one explicit choice for the parent agent to confirm
 
