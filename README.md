@@ -71,19 +71,22 @@ Codex custom agent 的 `model_reasoning_effort` 始終不由本設定包釘選�
 
 ```text
 .
-├── .codex/agents/                 Codex App 與 CLI agents
-├── .agents/skills/
-│   ├── orchestrate/               完整協作 workflow、contract schema 與 validator
-│   └── verify/                    獨立驗收 workflow
-├── .github/agents/                GitHub Copilot agents
-├── .github/copilot-instructions.md
-├── .github/copilot-user-instructions.md
+├── src/                            安裝器使用的主要設定內容
+│   ├── .codex/agents/              Codex App 與 CLI agents
+│   ├── .agents/skills/
+│   │   ├── orchestrate/            完整協作 workflow、contract schema 與 validator
+│   │   └── verify/                 獨立驗收 workflow
+│   ├── .github/agents/              GitHub Copilot agents
+│   ├── .github/copilot-instructions.md
+│   ├── .github/copilot-user-instructions.md
+│   └── AGENTS.md
 ├── tests/                          PowerShell 與 Bash 的安裝器及 contract 測試
-├── AGENTS.md
-├── install.ps1
-├── install.sh
+├── install.ps1                     Windows 安裝器
+├── install.sh                      macOS 與 Linux 安裝器
 └── README.md
 ```
+
+安裝器位於專案根目錄，但所有受管理的 agents、skills、instructions 與 `AGENTS.md` 都從 `src` 讀取，避免執行時把套件根目錄的文件誤當成目標專案規則重複載入
 
 `.agents/skills` 是 Codex 與 GitHub Copilot 都能讀取的共用位置，因此不需要維護兩份 skill
 

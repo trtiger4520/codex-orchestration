@@ -24,11 +24,12 @@ function Assert-Contains {
     }
 }
 
-$agents = Get-RepositoryContent "AGENTS.md"
-$skill = Get-RepositoryContent ".agents\skills\orchestrate\SKILL.md"
+$sourceRoot = Join-Path $repositoryRoot "src"
+$agents = Get-RepositoryContent "src\AGENTS.md"
+$skill = Get-RepositoryContent "src\.agents\skills\orchestrate\SKILL.md"
 $readme = Get-RepositoryContent "README.md"
-$copilotUser = Get-RepositoryContent ".github\copilot-user-instructions.md"
-$openAiMetadata = Get-RepositoryContent ".agents\skills\orchestrate\agents\openai.yaml"
+$copilotUser = Get-RepositoryContent "src\.github\copilot-user-instructions.md"
+$openAiMetadata = Get-RepositoryContent "src\.agents\skills\orchestrate\agents\openai.yaml"
 
 foreach ($lane in @("single-agent", "plan-light", "orchestrate-heavy")) {
     Assert-Contains -Content $agents -Expected $lane -Context "AGENTS.md"
@@ -63,7 +64,7 @@ Assert-Contains -Content $skill -Expected "Stop after two failed repair cycles" 
 Assert-Contains -Content $openAiMetadata -Expected "allow_implicit_invocation: false" -Context "orchestrate metadata"
 Assert-Contains -Content $copilotUser -Expected "Do not use the same agent context" -Context "Copilot user instructions"
 
-$codexAgentFiles = Get-ChildItem -LiteralPath (Join-Path $repositoryRoot ".codex\agents") -Filter "*.toml" -File
+$codexAgentFiles = Get-ChildItem -LiteralPath (Join-Path $sourceRoot ".codex\agents") -Filter "*.toml" -File
 foreach ($agentFile in $codexAgentFiles) {
     $content = Get-Content -Raw -LiteralPath $agentFile.FullName
     if ($content -match '(?m)^\s*(model|model_reasoning_effort)\s*=') {
@@ -71,7 +72,7 @@ foreach ($agentFile in $codexAgentFiles) {
     }
 }
 
-$copilotAgentFiles = Get-ChildItem -LiteralPath (Join-Path $repositoryRoot ".github\agents") -Filter "*.agent.md" -File
+$copilotAgentFiles = Get-ChildItem -LiteralPath (Join-Path $sourceRoot ".github\agents") -Filter "*.agent.md" -File
 foreach ($agentFile in $copilotAgentFiles) {
     $content = Get-Content -Raw -LiteralPath $agentFile.FullName
     if ($content -match '(?m)^model\s*:') {

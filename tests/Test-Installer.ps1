@@ -5,6 +5,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
+$sourceRoot = Join-Path $repositoryRoot "src"
 $installer = Join-Path $repositoryRoot "install.ps1"
 $pwsh = (Get-Process -Id $PID).Path
 $testRoot = Join-Path ([System.IO.Path]::GetTempPath()) "codex-orchestration-installer-$([guid]::NewGuid().ToString('N'))"
@@ -263,7 +264,7 @@ try {
         Assert-True ($conflict.ExitCode -ne 0) "-Check with -Force unexpectedly succeeded"
         Assert-True (($conflict.Output | Select-String -SimpleMatch "cannot be used together" -Quiet)) "-Check with -Force did not explain the conflict"
 
-        $samePath = Invoke-Installer -Arguments @("-Scope", "Project", "-Platform", "All", "-ProjectPath", $repositoryRoot, "-Check")
+        $samePath = Invoke-Installer -Arguments @("-Scope", "Project", "-Platform", "All", "-ProjectPath", $sourceRoot, "-Check")
         Assert-True ($samePath.ExitCode -eq 0) "Source-equals-destination check failed: $($samePath.Output)"
     }
 

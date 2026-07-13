@@ -9,6 +9,7 @@ force=0
 check=0
 
 package_root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
+source_root="$package_root/src"
 start_marker="<!-- codex-multi-agent-orchestration:start -->"
 end_marker="<!-- codex-multi-agent-orchestration:end -->"
 drift_count=0
@@ -507,34 +508,34 @@ install_targets() {
 
     if [ "$install_codex" -eq 1 ]; then
         if [ "$check" -eq 1 ]; then
-            test_managed_tree "$package_root/.codex/agents" "$codex_root"
-            test_managed_instructions "$package_root/AGENTS.md" "$codex_instructions_destination"
+            test_managed_tree "$source_root/.codex/agents" "$codex_root"
+            test_managed_instructions "$source_root/AGENTS.md" "$codex_instructions_destination"
         else
-            copy_managed_tree "$package_root/.codex/agents" "$codex_root"
-            merge_managed_instructions "$package_root/AGENTS.md" "$codex_instructions_destination"
+            copy_managed_tree "$source_root/.codex/agents" "$codex_root"
+            merge_managed_instructions "$source_root/AGENTS.md" "$codex_instructions_destination"
         fi
     fi
 
     if [ "$install_copilot" -eq 1 ]; then
         if [ "$scope" = "project" ]; then
-            copilot_instructions_source="$package_root/.github/copilot-instructions.md"
+            copilot_instructions_source="$source_root/.github/copilot-instructions.md"
         else
-            copilot_instructions_source="$package_root/.github/copilot-user-instructions.md"
+            copilot_instructions_source="$source_root/.github/copilot-user-instructions.md"
         fi
 
         if [ "$check" -eq 1 ]; then
-            test_managed_tree "$package_root/.github/agents" "$copilot_root"
+            test_managed_tree "$source_root/.github/agents" "$copilot_root"
             test_managed_instructions "$copilot_instructions_source" "$copilot_instructions_destination"
         else
-            copy_managed_tree "$package_root/.github/agents" "$copilot_root"
+            copy_managed_tree "$source_root/.github/agents" "$copilot_root"
             merge_managed_instructions "$copilot_instructions_source" "$copilot_instructions_destination"
         fi
     fi
 
     if [ "$check" -eq 1 ]; then
-        test_managed_tree "$package_root/.agents/skills" "$skills_root"
+        test_managed_tree "$source_root/.agents/skills" "$skills_root"
     else
-        copy_managed_tree "$package_root/.agents/skills" "$skills_root"
+        copy_managed_tree "$source_root/.agents/skills" "$skills_root"
     fi
 }
 

@@ -3,8 +3,9 @@
 set -euo pipefail
 
 repository_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
-validator="$repository_root/.agents/skills/orchestrate/scripts/Test-OrchestrationPlan.sh"
-schema="$repository_root/.agents/skills/orchestrate/references/orchestration-plan.schema.json"
+source_root="$repository_root/src"
+validator="$source_root/.agents/skills/orchestrate/scripts/Test-OrchestrationPlan.sh"
+schema="$source_root/.agents/skills/orchestrate/references/orchestration-plan.schema.json"
 temp_root=$(mktemp -d "${TMPDIR:-/tmp}/codex-orchestration-contract.XXXXXX")
 
 cleanup() {

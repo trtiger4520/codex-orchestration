@@ -5,8 +5,9 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repositoryRoot = Split-Path $PSScriptRoot -Parent
-$validator = Join-Path $repositoryRoot '.agents\skills\orchestrate\scripts\Test-OrchestrationPlan.ps1'
-$schema = Join-Path $repositoryRoot '.agents\skills\orchestrate\references\orchestration-plan.schema.json'
+$sourceRoot = Join-Path $repositoryRoot 'src'
+$validator = Join-Path $sourceRoot '.agents\skills\orchestrate\scripts\Test-OrchestrationPlan.ps1'
+$schema = Join-Path $sourceRoot '.agents\skills\orchestrate\references\orchestration-plan.schema.json'
 $pwsh = Join-Path $PSHOME 'pwsh.exe'
 if (-not (Test-Path -LiteralPath $pwsh)) {
     $pwsh = Join-Path $PSHOME 'pwsh'

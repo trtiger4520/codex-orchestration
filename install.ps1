@@ -17,6 +17,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $packageRoot = Split-Path -Parent $PSCommandPath
+$sourceRoot = Join-Path $packageRoot "src"
 $startMarker = "<!-- codex-multi-agent-orchestration:start -->"
 $endMarker = "<!-- codex-multi-agent-orchestration:end -->"
 $installCodex = $Platform -in @("Codex", "All")
@@ -597,31 +598,31 @@ if ($Scope -eq "Project") {
 
     if ($installCodex) {
         if ($Check) {
-            Test-ManagedTree -SourceRoot (Join-Path $packageRoot ".codex/agents") -DestinationRoot (Join-Path $targetRoot ".codex/agents")
-            Test-ManagedInstructions -Source (Join-Path $packageRoot "AGENTS.md") -Destination (Join-Path $targetRoot "AGENTS.md")
+            Test-ManagedTree -SourceRoot (Join-Path $sourceRoot ".codex/agents") -DestinationRoot (Join-Path $targetRoot ".codex/agents")
+            Test-ManagedInstructions -Source (Join-Path $sourceRoot "AGENTS.md") -Destination (Join-Path $targetRoot "AGENTS.md")
         }
         else {
-            Copy-ManagedTree -SourceRoot (Join-Path $packageRoot ".codex/agents") -DestinationRoot (Join-Path $targetRoot ".codex/agents")
-            Merge-ManagedInstructions -Source (Join-Path $packageRoot "AGENTS.md") -Destination (Join-Path $targetRoot "AGENTS.md")
+            Copy-ManagedTree -SourceRoot (Join-Path $sourceRoot ".codex/agents") -DestinationRoot (Join-Path $targetRoot ".codex/agents")
+            Merge-ManagedInstructions -Source (Join-Path $sourceRoot "AGENTS.md") -Destination (Join-Path $targetRoot "AGENTS.md")
         }
     }
 
     if ($installCopilot) {
         if ($Check) {
-            Test-ManagedTree -SourceRoot (Join-Path $packageRoot ".github/agents") -DestinationRoot (Join-Path $targetRoot ".github/agents")
-            Test-ManagedInstructions -Source (Join-Path $packageRoot ".github/copilot-instructions.md") -Destination (Join-Path $targetRoot ".github/copilot-instructions.md")
+            Test-ManagedTree -SourceRoot (Join-Path $sourceRoot ".github/agents") -DestinationRoot (Join-Path $targetRoot ".github/agents")
+            Test-ManagedInstructions -Source (Join-Path $sourceRoot ".github/copilot-instructions.md") -Destination (Join-Path $targetRoot ".github/copilot-instructions.md")
         }
         else {
-            Copy-ManagedTree -SourceRoot (Join-Path $packageRoot ".github/agents") -DestinationRoot (Join-Path $targetRoot ".github/agents")
-            Merge-ManagedInstructions -Source (Join-Path $packageRoot ".github/copilot-instructions.md") -Destination (Join-Path $targetRoot ".github/copilot-instructions.md")
+            Copy-ManagedTree -SourceRoot (Join-Path $sourceRoot ".github/agents") -DestinationRoot (Join-Path $targetRoot ".github/agents")
+            Merge-ManagedInstructions -Source (Join-Path $sourceRoot ".github/copilot-instructions.md") -Destination (Join-Path $targetRoot ".github/copilot-instructions.md")
         }
     }
 
     if ($Check) {
-        Test-ManagedTree -SourceRoot (Join-Path $packageRoot ".agents/skills") -DestinationRoot (Join-Path $targetRoot ".agents/skills")
+        Test-ManagedTree -SourceRoot (Join-Path $sourceRoot ".agents/skills") -DestinationRoot (Join-Path $targetRoot ".agents/skills")
     }
     else {
-        Copy-ManagedTree -SourceRoot (Join-Path $packageRoot ".agents/skills") -DestinationRoot (Join-Path $targetRoot ".agents/skills")
+        Copy-ManagedTree -SourceRoot (Join-Path $sourceRoot ".agents/skills") -DestinationRoot (Join-Path $targetRoot ".agents/skills")
     }
 
     if (-not $Check) {
@@ -641,32 +642,32 @@ else {
 
     if ($installCodex) {
         if ($Check) {
-            Test-ManagedTree -SourceRoot (Join-Path $packageRoot ".codex/agents") -DestinationRoot (Join-Path $codexHome "agents")
-            Test-ManagedInstructions -Source (Join-Path $packageRoot "AGENTS.md") -Destination (Join-Path $codexHome "AGENTS.md")
+            Test-ManagedTree -SourceRoot (Join-Path $sourceRoot ".codex/agents") -DestinationRoot (Join-Path $codexHome "agents")
+            Test-ManagedInstructions -Source (Join-Path $sourceRoot "AGENTS.md") -Destination (Join-Path $codexHome "AGENTS.md")
         }
         else {
-            Copy-ManagedTree -SourceRoot (Join-Path $packageRoot ".codex/agents") -DestinationRoot (Join-Path $codexHome "agents")
-            Merge-ManagedInstructions -Source (Join-Path $packageRoot "AGENTS.md") -Destination (Join-Path $codexHome "AGENTS.md")
+            Copy-ManagedTree -SourceRoot (Join-Path $sourceRoot ".codex/agents") -DestinationRoot (Join-Path $codexHome "agents")
+            Merge-ManagedInstructions -Source (Join-Path $sourceRoot "AGENTS.md") -Destination (Join-Path $codexHome "AGENTS.md")
         }
     }
 
     if ($installCopilot) {
-        $copilotUserInstructions = Join-Path $packageRoot ".github/copilot-user-instructions.md"
+        $copilotUserInstructions = Join-Path $sourceRoot ".github/copilot-user-instructions.md"
         if ($Check) {
-            Test-ManagedTree -SourceRoot (Join-Path $packageRoot ".github/agents") -DestinationRoot (Join-Path $copilotHome "agents")
+            Test-ManagedTree -SourceRoot (Join-Path $sourceRoot ".github/agents") -DestinationRoot (Join-Path $copilotHome "agents")
             Test-ManagedInstructions -Source $copilotUserInstructions -Destination (Join-Path $copilotHome "copilot-instructions.md")
         }
         else {
-            Copy-ManagedTree -SourceRoot (Join-Path $packageRoot ".github/agents") -DestinationRoot (Join-Path $copilotHome "agents")
+            Copy-ManagedTree -SourceRoot (Join-Path $sourceRoot ".github/agents") -DestinationRoot (Join-Path $copilotHome "agents")
             Merge-ManagedInstructions -Source $copilotUserInstructions -Destination (Join-Path $copilotHome "copilot-instructions.md")
         }
     }
 
     if ($Check) {
-        Test-ManagedTree -SourceRoot (Join-Path $packageRoot ".agents/skills") -DestinationRoot (Join-Path $userHome ".agents/skills")
+        Test-ManagedTree -SourceRoot (Join-Path $sourceRoot ".agents/skills") -DestinationRoot (Join-Path $userHome ".agents/skills")
     }
     else {
-        Copy-ManagedTree -SourceRoot (Join-Path $packageRoot ".agents/skills") -DestinationRoot (Join-Path $userHome ".agents/skills")
+        Copy-ManagedTree -SourceRoot (Join-Path $sourceRoot ".agents/skills") -DestinationRoot (Join-Path $userHome ".agents/skills")
     }
 
     if (-not $Check) {
