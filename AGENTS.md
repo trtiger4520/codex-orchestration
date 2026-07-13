@@ -9,6 +9,12 @@
 - Use `orchestration_explorer` for broad code search or call-chain tracing instead of adding raw search output to the main context
 - Keep delegated reports concise and summarize any report longer than roughly 300 words
 
+## Subagent usage reporting
+
+- Before task work begins, report `子代理使用：<是|否>｜模式：<single-agent|plan-light|orchestrate-heavy>｜不使用原因：<...>` after classifying the task. Omit `不使用原因` when subagents will be used
+- On task completion, report `子代理結果：<已派發，角色與任務：... | 未派發，未使用或派發失敗原因：...>`
+- When no subagent was used, state the reason in `未使用或派發失敗原因`; when dispatch failed, state the observed failure reason and any retry outcome
+
 ## Workflow
 
 1. Ask `orchestration_planner` to inspect the actual project and produce a Markdown summary plus a valid declarative task contract with acceptance criteria

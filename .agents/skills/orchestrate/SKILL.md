@@ -7,6 +7,13 @@ description: Coordinate an explicitly requested multi-file or multi-step enginee
 
 Coordinate the parent task while keeping planning, implementation, and verification in separate agent contexts
 
+## Subagent usage reporting
+
+- Before task work begins, report `子代理使用：是｜模式：orchestrate-heavy`
+- If no subagent can be dispatched, report `子代理使用：否｜模式：orchestrate-heavy｜不使用原因：<...>`
+- On task completion, report `子代理結果：<已派發，角色與任務：... | 未派發，未使用或派發失敗原因：...>`
+- If a planned role was not dispatched or dispatch failed, include the observed reason and retry outcome in `未使用或派發失敗原因`
+
 ## Workflow
 
 1. Send the complete request to `orchestration_planner`

@@ -41,12 +41,22 @@ foreach ($content in @($agents, $skill, $copilotUser)) {
     Assert-Contains -Content $content -Expected "at most two" -Context "Writer limit"
     Assert-Contains -Content $content -Expected "30 seconds" -Context "Capacity retry"
     Assert-Contains -Content $content -Expected "90 seconds" -Context "Capacity retry"
+    Assert-Contains -Content $content -Expected "子代理使用" -Context "Subagent usage plan"
+    Assert-Contains -Content $content -Expected "模式" -Context "Subagent usage plan"
+    Assert-Contains -Content $content -Expected "不使用原因" -Context "Subagent usage plan"
+    Assert-Contains -Content $content -Expected "子代理結果" -Context "Subagent usage outcome"
+    Assert-Contains -Content $content -Expected "已派發，角色與任務" -Context "Subagent usage outcome"
+    Assert-Contains -Content $content -Expected "未使用或派發失敗原因" -Context "Subagent usage outcome"
 }
 
 Assert-Contains -Content $readme -Expected "可用 slots" -Context "README concurrency policy"
 Assert-Contains -Content $readme -Expected "最多兩個" -Context "README writer limit"
 Assert-Contains -Content $readme -Expected "30 秒" -Context "README capacity retry"
 Assert-Contains -Content $readme -Expected "90 秒" -Context "README capacity retry"
+Assert-Contains -Content $readme -Expected "子代理使用" -Context "README subagent usage plan"
+Assert-Contains -Content $readme -Expected "子代理結果" -Context "README subagent usage outcome"
+Assert-Contains -Content $readme -Expected "已派發，角色與任務" -Context "README dispatched roles and tasks"
+Assert-Contains -Content $readme -Expected "未使用或派發失敗原因" -Context "README no-use or dispatch failure reason"
 
 Assert-Contains -Content $agents -Expected "Stop after two failed repair cycles" -Context "AGENTS.md"
 Assert-Contains -Content $skill -Expected "Stop after two failed repair cycles" -Context "orchestrate skill"
