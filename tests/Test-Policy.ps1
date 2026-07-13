@@ -79,4 +79,10 @@ foreach ($agentFile in $copilotAgentFiles) {
     }
 }
 
+Assert-Contains -Content $readme -Expected "5.6-luna" -Context "README model defaults"
+Assert-Contains -Content $readme -Expected ".codex-orchestration-models.json" -Context "README model sidecar"
+Assert-Contains -Content $readme -Expected "inherit" -Context "README manual model input"
+Assert-Contains -Content $readme -Expected "-Check" -Context "README non-interactive check"
+Assert-Contains -Content $readme -Expected "不再次詢問模型" -Context "README non-interactive check"
+
 Write-Output "All orchestration policy tests passed"

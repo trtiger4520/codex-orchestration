@@ -8,19 +8,23 @@
 |---|---|---|---|---|
 | 專責 custom agents | 支援 | 支援 | 支援 | 支援，依產品可用性而定 |
 | `$orchestrate`、`$verify` skills | 支援 | 支援 | 支援 | 支援 Agent Skills 的介面可用 |
-| 子代理模型選擇 | 由目前工作階段與 Codex 自動選擇 | 由目前工作階段與 Codex 自動選擇 | 依目前選取的模型或 Auto | 依產品可用性而定 |
+| 子代理模型選擇 | 由安裝時設定，未指定時繼承 | 由安裝時設定，未指定時繼承 | 由安裝時設定，未指定時繼承 | 依產品可用性而定 |
 | 專案規則 | `AGENTS.md` | `AGENTS.md` | `AGENTS.md` / Copilot instructions | Copilot instructions |
 
 ## 角色與模型設定
 
 | Agent | 模型設定 | 職責 |
 |---|---|---|
-| `orchestration_planner` | 不釘選 `model` 或 `model_reasoning_effort` | 拆解需求、驗證路徑、定義驗收條件與依賴 |
-| `orchestration_explorer` | 不釘選 `model` 或 `model_reasoning_effort` | 快速搜尋、追蹤呼叫鏈、整理現有模式 |
-| `orchestration_implementer` | 不釘選 `model` 或 `model_reasoning_effort` | 執行單一已核准子任務並自我驗證 |
-| `orchestration_verifier` | 不釘選 `model` 或 `model_reasoning_effort` | 獨立檢查完整變更並執行實際測試 |
+| `orchestration_planner` | 預設繼承，不寫入 `model`；可手動指定 | 拆解需求、驗證路徑、定義驗收條件與依賴 |
+| `orchestration_explorer` | 預設 `5.6-luna`；可手動指定或改為繼承 | 快速搜尋、追蹤呼叫鏈、整理現有模式 |
+| `orchestration_implementer` | 預設 `5.6-luna`；可手動指定或改為繼承 | 執行單一已核准子任務並自我驗證 |
+| `orchestration_verifier` | 預設繼承，不寫入 `model`；可手動指定 | 獨立檢查完整變更並執行實際測試 |
 
-Codex custom agent 未釘選模型與推理強度時，會使用目前父工作階段的設定，或由 Codex 依任務選擇可用的設定。主代理仍決定角色、子任務與派發時機，但無法預先查詢特定服務端模型是否有容量。Copilot agents 同樣不指定 `model`，會繼承目前選取的模型或 Auto
+Codex custom agent 的 `model_reasoning_effort` 始終不由本設定包釘選。模型欄位由安裝器依互動設定寫入，使用 `inherit` 時會省略 Codex TOML 的 `model` 與 Copilot agent front matter 的 `model`，交由目前父工作階段、目前選取的模型或產品設定處理
+
+非 `-Check` 安裝會依序詢問 planner、explorer、implementer、verifier 的模型。提示中的 `Enter=default` 會採用該角色預設值，輸入 `inherit` 會省略模型欄位，也可以直接輸入自訂模型名稱。安裝器不接受空白模型名稱或包含換行的輸入
+
+模型設定會保存於 sidecar：Project Scope 是目標專案根目錄的 `.codex-orchestration-models.json`，User Scope 是 `$HOME/.codex-orchestration-models.json`。sidecar 只保存非繼承的模型值，重新執行 `-Check` 時會讀取該檔案、不再次詢問模型，也不建立或更新任何檔案
 
 ## 工作流程
 
@@ -90,6 +94,8 @@ Windows 需要 PowerShell 7 以上版本
 macOS 與 Linux 需要 Bash 3.2 以上版本，以及 `shasum` 或 `sha256sum`。macOS 內建 Bash 可直接使用
 
 在 Bash 環境驗證 orchestration plan 時，另需 Python 3；validator 僅使用 Python 標準函式庫，不需要安裝套件
+
+Bash 安裝器在模型設定、agent 內容轉換與 sidecar 保存或讀取時需要 `python3`。`tests/Test-Installer.sh` 在找不到 `python3` 時會明確略過相依模型的測試，仍執行不涉及 sidecar 的檢查
 
 ### 安裝到個人環境
 
@@ -208,7 +214,7 @@ Codex CLI 與 Copilot CLI 都可以使用 `/agent` 查看或切換 custom agent
 
 ## 模型可用性與容量
 
-此設定包不指定 GPT-5.6、Spark 或其他具名模型作為預設或 fallback。模型是否可用、容量是否足夠，皆由目前工作階段與服務端決定，沒有可在派發前使用的服務端容量預查
+安裝器只將 `5.6-luna` 設為 explorer 與 implementer 的初始預設，不將 GPT-5.6、Spark 或其他具名模型作為全域 fallback。模型是否可用、容量是否足夠，皆由目前工作階段與服務端決定，沒有可在派發前使用的服務端容量預查
 
 容量錯誤的處理方式僅限於工作流程中的兩次原任務重派。若仍無法建立子代理，會保留原始錯誤並回報未完成項目，不會靜默改派其他模型
 

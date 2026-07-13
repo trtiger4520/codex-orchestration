@@ -32,6 +32,215 @@ hash_file() {
     fi
 }
 
+hash_stdin() {
+    if command -v shasum >/dev/null 2>&1; then
+        shasum -a 256 | awk '{ print $1 }'
+    elif command -v sha256sum >/dev/null 2>&1; then
+        sha256sum | awk '{ print $1 }'
+    else
+        fail "Neither shasum nor sha256sum is available"
+    fi
+}
+
+agent_role() {
+    source_file=$1
+    file_name=$(basename -- "$source_file")
+    case "$file_name" in
+        orchestration_*.toml) role=${file_name#orchestration_}; role=${role%.toml} ;;
+        orchestration_*.agent.md) role=${file_name#orchestration_}; role=${role%.agent.md} ;;
+        *) return 0 ;;
+    esac
+
+    case "$role" in
+        planner|explorer|implementer|verifier) printf '%s' "$role" ;;
+    esac
+}
+
+model_for_role() {
+    case "$1" in
+        planner) printf '%s' "$model_planner" ;;
+        explorer) printf '%s' "$model_explorer" ;;
+        implementer) printf '%s' "$model_implementer" ;;
+        verifier) printf '%s' "$model_verifier" ;;
+        *) fail "Unknown model role: $1" ;;
+    esac
+}
+
+transform_agent() {
+    source_file=$1
+    role=$2
+    model=$3
+    python3 - "$source_file" "$role" "$model" <<'PY'
+import json
+import re
+import sys
+
+source_file, role, model = sys.argv[1:]
+with open(source_file, "r", encoding="utf-8", newline="") as source:
+    text = source.read()
+newline = "\r\n" if "\r\n" in text else "\n"
+lines = text.splitlines()
+trailing_newline = text.endswith(("\r\n", "\n", "\r"))
+quoted_model = json.dumps(model, ensure_ascii=False)
+
+if source_file.lower().endswith(".toml"):
+    lines = [line for line in lines if not re.match(r"^\s*model\s*=", line)]
+    if model:
+        for index, line in enumerate(lines):
+            if re.match(r"^\s*name\s*=", line):
+                lines.insert(index + 1, f"model = {quoted_model}")
+                break
+        else:
+            lines.insert(0, f"model = {quoted_model}")
+else:
+    if not lines or lines[0].strip() != "---":
+        raise ValueError(f"Malformed Copilot agent front matter: {source_file}")
+    try:
+        front_matter_end = next(index for index in range(1, len(lines)) if lines[index].strip() == "---")
+    except StopIteration as error:
+        raise ValueError(f"Malformed Copilot agent front matter: {source_file}") from error
+
+    front_matter = [line for line in lines[1:front_matter_end] if not re.match(r"^\s*model\s*:", line)]
+    if model:
+        front_matter.insert(0, f"model: {quoted_model}")
+    lines = [lines[0], *front_matter, *lines[front_matter_end:]]
+
+result = newline.join(lines)
+if trailing_newline:
+    result += newline
+sys.stdout.buffer.write(result.encode("utf-8"))
+PY
+}
+
+configured_hash() {
+    source_file=$1
+    role=$2
+    model=$3
+    transform_agent "$source_file" "$role" "$model" | hash_stdin
+}
+
+prompt_model() {
+    role=$1
+    default_value=$2
+    if [ -n "$default_value" ]; then
+        default_label=$default_value
+    else
+        default_label=inherit
+    fi
+
+    while true; do
+        printf 'Model for %s [%s] (Enter=default, inherit=inherit): ' "$role" "$default_label" >&2
+        IFS= read -r value || fail "Unable to read model for $role"
+        if [ -z "$value" ]; then
+            REPLY=$default_value
+            return
+        fi
+        if [ "$value" = "inherit" ]; then
+            REPLY=""
+            return
+        fi
+        case "$value" in
+            *$'\r'*|*$'\n'*) printf '%s\n' "Model must not contain a newline" >&2 ;;
+            *)
+                case "$value" in
+                    *[![:space:]]*) REPLY=$value; return ;;
+                    *) printf '%s\n' "Model must be non-empty" >&2 ;;
+                esac
+                ;;
+        esac
+    done
+}
+
+load_model_settings() {
+    sidecar_path=$1
+    if [ ! -f "$sidecar_path" ]; then
+        model_planner=""
+        model_explorer="5.6-luna"
+        model_implementer="5.6-luna"
+        model_verifier=""
+        return
+    fi
+    command -v python3 >/dev/null 2>&1 || fail "python3 is required to read model settings JSON"
+
+    output=$(python3 - "$sidecar_path" <<'PY'
+import json
+import sys
+
+path = sys.argv[1]
+roles = ("planner", "explorer", "implementer", "verifier")
+defaults = {"planner": None, "explorer": "5.6-luna", "implementer": "5.6-luna", "verifier": None}
+try:
+    with open(path, "r", encoding="utf-8") as sidecar:
+        parsed = json.load(sidecar)
+except (OSError, json.JSONDecodeError) as error:
+    raise SystemExit(f"Malformed model settings JSON: {path}") from error
+
+if not isinstance(parsed, dict):
+    raise SystemExit(f"Malformed model settings JSON: {path}")
+unknown = set(parsed) - set(roles)
+if unknown:
+    raise SystemExit(f"Malformed model settings JSON: unknown model role(s) in {path}")
+
+for role in roles:
+    value = parsed.get(role, defaults[role])
+    if value is None:
+        print()
+    elif isinstance(value, str) and value and not any(character in value for character in "\r\n"):
+        print(value)
+    else:
+        raise SystemExit(f"Malformed model settings JSON: invalid model for '{role}' in {path}")
+print("__CODEX_MODEL_SETTINGS_END__")
+PY
+) || fail "$output"
+
+    settings=()
+    while IFS= read -r line; do
+        line=${line%$'\r'}
+        settings+=("$line")
+    done <<< "$output"
+    [ "${settings[4]:-}" = "__CODEX_MODEL_SETTINGS_END__" ] || fail "Malformed model settings JSON: $sidecar_path"
+    model_planner=${settings[0]}
+    model_explorer=${settings[1]}
+    model_implementer=${settings[2]}
+    model_verifier=${settings[3]}
+}
+
+save_model_settings() {
+    sidecar_path=$1
+    python3 - "$sidecar_path" "$model_planner" "$model_explorer" "$model_implementer" "$model_verifier" <<'PY'
+import json
+import os
+import sys
+
+path, planner, explorer, implementer, verifier = sys.argv[1:]
+settings = {}
+for role, value in (("planner", planner), ("explorer", explorer), ("implementer", implementer), ("verifier", verifier)):
+    if value:
+        settings[role] = value
+os.makedirs(os.path.dirname(path), exist_ok=True)
+with open(path, "w", encoding="utf-8", newline="\n") as sidecar:
+    json.dump(settings, sidecar, ensure_ascii=False, separators=(",", ":"))
+    sidecar.write("\n")
+PY
+}
+
+configure_models() {
+    sidecar_path=$1
+    if [ "$check" -eq 1 ]; then
+        load_model_settings "$sidecar_path"
+        return
+    fi
+
+    prompt_model planner ""
+    model_planner=$REPLY
+    prompt_model explorer "5.6-luna"
+    model_explorer=$REPLY
+    prompt_model implementer "5.6-luna"
+    model_implementer=$REPLY
+    prompt_model verifier ""
+    model_verifier=$REPLY
+}
+
 same_path() {
     left_dir=$(CDPATH= cd -- "$(dirname -- "$1")" && pwd -P) || return 1
     right_dir=$(CDPATH= cd -- "$(dirname -- "$2")" && pwd -P) || return 1
@@ -77,7 +286,16 @@ copy_managed_tree() {
 
     while IFS= read -r source_file; do
         relative_path=${source_file#"$source_root"/}
-        copy_managed_file "$source_file" "$destination_root/$relative_path"
+        destination_file="$destination_root/$relative_path"
+        role=$(agent_role "$source_file")
+        if [ -z "$role" ] || { [ -e "$destination_file" ] && same_path "$source_file" "$destination_file"; }; then
+            copy_managed_file "$source_file" "$destination_file"
+        else
+            temporary_file=$(mktemp "${TMPDIR:-/tmp}/codex-agent.XXXXXX")
+            transform_agent "$source_file" "$role" "$(model_for_role "$role")" > "$temporary_file"
+            copy_managed_file "$temporary_file" "$destination_file"
+            rm -f "$temporary_file"
+        fi
     done < <(find "$source_root" -type f -print)
 }
 
@@ -106,7 +324,20 @@ test_managed_tree() {
 
     while IFS= read -r source_file; do
         relative_path=${source_file#"$source_root"/}
-        test_managed_file "$source_file" "$destination_root/$relative_path"
+        destination_file="$destination_root/$relative_path"
+        role=$(agent_role "$source_file")
+        if [ -z "$role" ]; then
+            test_managed_file "$source_file" "$destination_file"
+        else
+            if [ -e "$destination_file" ] && same_path "$source_file" "$destination_file"; then
+                continue
+            fi
+            if [ ! -f "$destination_file" ]; then
+                add_drift "Missing" "$destination_file"
+            elif [ "$(configured_hash "$source_file" "$role" "$(model_for_role "$role")")" != "$(hash_file "$destination_file")" ]; then
+                add_drift "Different" "$destination_file"
+            fi
+        fi
     done < <(find "$source_root" -type f -print)
 }
 
@@ -311,13 +542,19 @@ if [ "$scope" = "project" ]; then
     [ -n "$project_path" ] || fail "--project-path is required when --scope project is selected"
     [ -d "$project_path" ] || fail "Project path not found: $project_path"
     target_root=$(CDPATH= cd -- "$project_path" && pwd -P)
+    model_sidecar="$target_root/.codex-orchestration-models.json"
+    configure_models "$model_sidecar"
     install_targets "$target_root/AGENTS.md" "$target_root/.codex/agents" "$target_root/.github/copilot-instructions.md" "$target_root/.github/agents" "$target_root/.agents/skills"
+    [ "$check" -eq 1 ] || save_model_settings "$model_sidecar"
 else
     user_home=${HOME:-}
     [ -n "$user_home" ] || fail "HOME is not available in this Bash session"
     codex_home=${CODEX_HOME:-"$user_home/.codex"}
     copilot_home=${COPILOT_HOME:-"$user_home/.copilot"}
+    model_sidecar="$user_home/.codex-orchestration-models.json"
+    configure_models "$model_sidecar"
     install_targets "$codex_home/AGENTS.md" "$codex_home/agents" "$copilot_home/copilot-instructions.md" "$copilot_home/agents" "$user_home/.agents/skills"
+    [ "$check" -eq 1 ] || save_model_settings "$model_sidecar"
 fi
 
 if [ "$check" -eq 1 ]; then

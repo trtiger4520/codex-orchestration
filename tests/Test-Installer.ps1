@@ -27,10 +27,19 @@ function Assert-True {
 function Invoke-Installer {
     param(
         [Parameter(Mandatory)]
-        [string[]]$Arguments
+        [string[]]$Arguments,
+
+        [AllowNull()]
+        [string[]]$ModelInputs = @("inherit", "", "", "inherit")
     )
 
-    $output = & $pwsh -NoProfile -File $installer @Arguments 2>&1
+    if ($null -eq $ModelInputs) {
+        $output = & $pwsh -NoProfile -File $installer @Arguments 2>&1
+    }
+    else {
+        $inputText = ($ModelInputs -join "`n") + "`n"
+        $output = $inputText | & $pwsh -NoProfile -File $installer @Arguments 2>&1
+    }
     return [pscustomobject]@{
         ExitCode = $LASTEXITCODE
         Output = ($output | Out-String)
@@ -80,6 +89,79 @@ try {
             $after = Get-TreeSnapshot -Path $project
             Assert-True ($check.ExitCode -eq 0) "Check failed for ${platform}: $($check.Output)"
             Assert-True ($before -eq $after) "Check changed files for $platform"
+        }
+    }
+
+    Invoke-Test "model defaults, inheritance, and generated agent settings" {
+        $project = Join-Path $testRoot "model-defaults"
+        New-Item -ItemType Directory -Force -Path $project | Out-Null
+        $install = Invoke-Installer -Arguments @("-Scope", "Project", "-Platform", "All", "-ProjectPath", $project) -ModelInputs @("inherit", "", "", "inherit")
+        Assert-True ($install.ExitCode -eq 0) $install.Output
+
+        $sidecar = Get-Content -Raw -Encoding utf8 -LiteralPath (Join-Path $project ".codex-orchestration-models.json") | ConvertFrom-Json
+        Assert-True (-not ($sidecar.PSObject.Properties.Name -contains "planner")) "Planner default was not inherited"
+        Assert-True ($sidecar.explorer -eq "5.6-luna") "Explorer default was not saved"
+        Assert-True ($sidecar.implementer -eq "5.6-luna") "Implementer default was not saved"
+        Assert-True (-not ($sidecar.PSObject.Properties.Name -contains "verifier")) "Verifier default was not inherited"
+
+        foreach ($role in @("planner", "verifier")) {
+            $codex = Get-Content -Raw -Encoding utf8 -LiteralPath (Join-Path $project ".codex/agents/orchestration_$role.toml")
+            $copilot = Get-Content -Raw -Encoding utf8 -LiteralPath (Join-Path $project ".github/agents/orchestration_$role.agent.md")
+            Assert-True ($codex -notmatch '(?m)^\s*model\s*=') "Inherited Codex model was written for $role"
+            Assert-True ($copilot -notmatch '(?m)^model\s*:') "Inherited Copilot model was written for $role"
+        }
+
+        foreach ($role in @("explorer", "implementer")) {
+            $codex = Get-Content -Raw -Encoding utf8 -LiteralPath (Join-Path $project ".codex/agents/orchestration_$role.toml")
+            $copilot = Get-Content -Raw -Encoding utf8 -LiteralPath (Join-Path $project ".github/agents/orchestration_$role.agent.md")
+            Assert-True ($codex.Contains('model = "5.6-luna"')) "Explorer or implementer Codex default was not written for $role"
+            Assert-True ($copilot.Contains('model: "5.6-luna"')) "Explorer or implementer Copilot default was not written for $role"
+        }
+    }
+
+    Invoke-Test "custom models are saved and Check is non-interactive and read-only" {
+        $project = Join-Path $testRoot "model-custom"
+        New-Item -ItemType Directory -Force -Path $project | Out-Null
+        $models = @("custom-planner", "custom-explorer", "custom-implementer", "custom-verifier")
+        $install = Invoke-Installer -Arguments @("-Scope", "Project", "-Platform", "All", "-ProjectPath", $project) -ModelInputs $models
+        Assert-True ($install.ExitCode -eq 0) $install.Output
+
+        $sidecar = Get-Content -Raw -Encoding utf8 -LiteralPath (Join-Path $project ".codex-orchestration-models.json") | ConvertFrom-Json
+        foreach ($role in @("planner", "explorer", "implementer", "verifier")) {
+            Assert-True ($sidecar.$role -eq "custom-$role") "Custom model was not saved for $role"
+            $codex = Get-Content -Raw -Encoding utf8 -LiteralPath (Join-Path $project ".codex/agents/orchestration_$role.toml")
+            $copilot = Get-Content -Raw -Encoding utf8 -LiteralPath (Join-Path $project ".github/agents/orchestration_$role.agent.md")
+            $expectedCodex = 'model = "' + "custom-$role" + '"'
+            $expectedCopilot = 'model: "' + "custom-$role" + '"'
+            Assert-True ($codex.Contains($expectedCodex)) "Custom Codex model was not written for $role"
+            Assert-True ($copilot.Contains($expectedCopilot)) "Custom Copilot model was not written for $role"
+        }
+
+        $before = Get-TreeSnapshot -Path $project
+        $check = Invoke-Installer -Arguments @("-Scope", "Project", "-Platform", "All", "-ProjectPath", $project, "-Check") -ModelInputs $null
+        $after = Get-TreeSnapshot -Path $project
+        Assert-True ($check.ExitCode -eq 0) "Custom model check failed: $($check.Output)"
+        Assert-True (-not $check.Output.Contains("Model for ")) "Check prompted for model input"
+        Assert-True ($before -eq $after) "Check changed files or sidecar"
+    }
+
+    Invoke-Test "malformed and invalid model sidecars are rejected" {
+        $cases = @(
+            [pscustomobject]@{ Name = "malformed"; Content = '{"explorer":'; Expected = "Malformed model settings JSON" },
+            [pscustomobject]@{ Name = "invalid"; Content = '{"explorer":42}'; Expected = "invalid model for 'explorer'" },
+            [pscustomobject]@{ Name = "unknown-role"; Content = '{"unknown":"model"}'; Expected = "unknown model role" }
+        )
+
+        foreach ($case in $cases) {
+            $project = Join-Path $testRoot "sidecar-$($case.Name)"
+            New-Item -ItemType Directory -Force -Path $project | Out-Null
+            $install = Invoke-Installer -Arguments @("-Scope", "Project", "-Platform", "All", "-ProjectPath", $project) -ModelInputs @("inherit", "", "", "inherit")
+            Assert-True ($install.ExitCode -eq 0) $install.Output
+            Set-Content -Encoding utf8 -NoNewline -LiteralPath (Join-Path $project ".codex-orchestration-models.json") -Value $case.Content
+
+            $check = Invoke-Installer -Arguments @("-Scope", "Project", "-Platform", "All", "-ProjectPath", $project, "-Check") -ModelInputs $null
+            Assert-True ($check.ExitCode -ne 0) "$($case.Name) sidecar was accepted"
+            Assert-True ($check.Output.Contains($case.Expected)) "$($case.Name) sidecar error was not reported: $($check.Output)"
         }
     }
 

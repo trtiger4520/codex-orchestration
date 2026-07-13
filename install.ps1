@@ -22,6 +22,13 @@ $endMarker = "<!-- codex-multi-agent-orchestration:end -->"
 $installCodex = $Platform -in @("Codex", "All")
 $installCopilot = $Platform -in @("Copilot", "All")
 $drift = [System.Collections.Generic.List[object]]::new()
+$modelDefaults = [ordered]@{
+    planner = $null
+    explorer = "5.6-luna"
+    implementer = "5.6-luna"
+    verifier = $null
+}
+$modelSettings = [ordered]@{}
 
 if ($Check -and $Force) {
     throw "-Check and -Force cannot be used together"
@@ -95,7 +102,20 @@ function Copy-ManagedTree {
     foreach ($sourceFile in Get-ChildItem -LiteralPath $SourceRoot -Recurse -File) {
         $relativePath = [System.IO.Path]::GetRelativePath($SourceRoot, $sourceFile.FullName)
         $destinationFile = Join-Path $DestinationRoot $relativePath
-        Copy-ManagedFile -Source $sourceFile.FullName -Destination $destinationFile
+        $role = Get-AgentRole -Source $sourceFile.FullName
+        if ($null -eq $role -or (Test-SamePath -Left $sourceFile.FullName -Right $destinationFile)) {
+            Copy-ManagedFile -Source $sourceFile.FullName -Destination $destinationFile
+            continue
+        }
+
+        $temporaryFile = Join-Path ([System.IO.Path]::GetTempPath()) ("codex-agent-" + [guid]::NewGuid().ToString("N"))
+        try {
+            Set-Content -Encoding utf8 -NoNewline -LiteralPath $temporaryFile -Value (Get-ConfiguredAgentContent -Source $sourceFile.FullName -Role $role -Model $modelSettings[$role])
+            Copy-ManagedFile -Source $temporaryFile -Destination $destinationFile
+        }
+        finally {
+            Remove-Item -Force -LiteralPath $temporaryFile -ErrorAction SilentlyContinue
+        }
     }
 }
 
@@ -156,8 +176,284 @@ function Test-ManagedTree {
 
     foreach ($sourceFile in Get-ChildItem -LiteralPath $SourceRoot -Recurse -File) {
         $relativePath = [System.IO.Path]::GetRelativePath($SourceRoot, $sourceFile.FullName)
-        Test-ManagedFile -Source $sourceFile.FullName -Destination (Join-Path $DestinationRoot $relativePath)
+        $destinationFile = Join-Path $DestinationRoot $relativePath
+        $role = Get-AgentRole -Source $sourceFile.FullName
+        if ($null -eq $role) {
+            Test-ManagedFile -Source $sourceFile.FullName -Destination $destinationFile
+            continue
+        }
+
+        Test-ManagedAgentFile -Source $sourceFile.FullName -Destination $destinationFile -Role $role -Model $modelSettings[$role]
     }
+}
+
+function Get-AgentRole {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Source
+    )
+
+    $fileName = [System.IO.Path]::GetFileName($Source)
+    if ($fileName.EndsWith(".toml", [System.StringComparison]::OrdinalIgnoreCase)) {
+        $name = $fileName.Substring(0, $fileName.Length - 5)
+    }
+    elseif ($fileName.EndsWith(".agent.md", [System.StringComparison]::OrdinalIgnoreCase)) {
+        $name = $fileName.Substring(0, $fileName.Length - 9)
+    }
+    else {
+        return $null
+    }
+
+    if ($name.StartsWith("orchestration_", [System.StringComparison]::OrdinalIgnoreCase)) {
+        $role = $name.Substring(14).ToLowerInvariant()
+        if ($modelDefaults.Contains($role)) {
+            return $role
+        }
+    }
+
+    return $null
+}
+
+function Escape-DoubleQuotedValue {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Value
+    )
+
+    $builder = [System.Text.StringBuilder]::new()
+    foreach ($character in $Value.ToCharArray()) {
+        $code = [int][char]$character
+        if ($character -eq '\') {
+            [void]$builder.Append('\\')
+        }
+        elseif ($character -eq '"') {
+            [void]$builder.Append('\"')
+        }
+        elseif ($character -eq "`b") {
+            [void]$builder.Append('\b')
+        }
+        elseif ($character -eq "`t") {
+            [void]$builder.Append('\t')
+        }
+        elseif ($character -eq "`n") {
+            [void]$builder.Append('\n')
+        }
+        elseif ($character -eq "`f") {
+            [void]$builder.Append('\f')
+        }
+        elseif ($character -eq "`r") {
+            [void]$builder.Append('\r')
+        }
+        elseif ($code -lt 0x20 -or $code -eq 0x7f) {
+            [void]$builder.Append(('\u{0:X4}' -f $code))
+        }
+        else {
+            [void]$builder.Append($character)
+        }
+    }
+
+    return $builder.ToString()
+}
+
+function Get-ConfiguredAgentContent {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Source,
+
+        [Parameter(Mandatory)]
+        [string]$Role,
+
+        [AllowNull()]
+        [string]$Model
+    )
+
+    $content = Get-Content -Raw -Encoding utf8 -LiteralPath $Source
+    $newline = if ($content.Contains("`r`n")) { "`r`n" } else { "`n" }
+    $lines = [regex]::Split($content, "\r\n|\n|\r")
+    $escapedModel = if ([string]::IsNullOrEmpty($Model)) { $null } else { Escape-DoubleQuotedValue -Value $Model }
+
+    if ($Source.EndsWith(".toml", [System.StringComparison]::OrdinalIgnoreCase)) {
+        $lines = @($lines | Where-Object { $_ -notmatch '^\s*model\s*=' })
+        if ($null -ne $escapedModel) {
+            $nameIndex = -1
+            for ($index = 0; $index -lt $lines.Count; $index++) {
+                if ($lines[$index] -match '^\s*name\s*=') {
+                    $nameIndex = $index
+                    break
+                }
+            }
+
+            if ($nameIndex -lt 0) {
+                $lines = @('model = "' + $escapedModel + '"') + $lines
+            }
+            else {
+                $before = @($lines[0..$nameIndex])
+                $after = if ($nameIndex + 1 -lt $lines.Count) { @($lines[($nameIndex + 1)..($lines.Count - 1)]) } else { @() }
+                $lines = $before + @('model = "' + $escapedModel + '"') + $after
+            }
+        }
+    }
+    else {
+        if ($lines.Count -lt 2 -or $lines[0].Trim() -ne "---") {
+            throw "Malformed Copilot agent front matter: $Source"
+        }
+
+        $frontMatterEnd = -1
+        for ($index = 1; $index -lt $lines.Count; $index++) {
+            if ($lines[$index].Trim() -eq "---") {
+                $frontMatterEnd = $index
+                break
+            }
+        }
+
+        if ($frontMatterEnd -lt 0) {
+            throw "Malformed Copilot agent front matter: $Source"
+        }
+
+        $prefix = @($lines[0])
+        $frontMatter = if ($frontMatterEnd -gt 1) { @($lines[1..($frontMatterEnd - 1)] | Where-Object { $_ -notmatch '^\s*model\s*:' }) } else { @() }
+        $suffix = @($lines[$frontMatterEnd..($lines.Count - 1)])
+        if ($null -ne $escapedModel) {
+            $frontMatter = @('model: "' + $escapedModel + '"') + $frontMatter
+        }
+        $lines = $prefix + $frontMatter + $suffix
+    }
+
+    return [string]::Join($newline, $lines)
+}
+
+function Test-ManagedAgentFile {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Source,
+
+        [Parameter(Mandatory)]
+        [string]$Destination,
+
+        [Parameter(Mandatory)]
+        [string]$Role,
+
+        [AllowNull()]
+        [string]$Model
+    )
+
+    if (Test-SamePath -Left $Source -Right $Destination) {
+        return
+    }
+
+    if (-not (Test-Path -LiteralPath $Destination -PathType Leaf)) {
+        Add-Drift -Kind Missing -Path $Destination
+        return
+    }
+
+    $sourceBytes = [System.Text.Encoding]::UTF8.GetBytes((Get-ConfiguredAgentContent -Source $Source -Role $Role -Model $Model))
+    $sourceHash = [System.BitConverter]::ToString(([System.Security.Cryptography.SHA256]::Create().ComputeHash($sourceBytes))).Replace('-', '')
+    $destinationHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $Destination).Hash
+    if (-not $sourceHash.Equals($destinationHash, [System.StringComparison]::OrdinalIgnoreCase)) {
+        Add-Drift -Kind Different -Path $Destination
+    }
+}
+
+function Get-ModelSetting {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Role,
+
+        [AllowNull()]
+        [string]$Default
+    )
+
+    $defaultLabel = if ($null -eq $Default) { "inherit" } else { $Default }
+    while ($true) {
+        $value = Read-Host "Model for $Role [$defaultLabel] (Enter=default, inherit=inherit)"
+        if ([string]::IsNullOrEmpty($value)) {
+            return $Default
+        }
+        if ($value -ieq "inherit") {
+            return $null
+        }
+        if ($value -match '[\r\n]' -or [string]::IsNullOrWhiteSpace($value)) {
+            Write-Host "Model must be non-empty and must not contain a newline"
+            continue
+        }
+
+        return $value
+    }
+}
+
+function Read-ModelSettings {
+    param(
+        [Parameter(Mandatory)]
+        [string]$SidecarPath,
+
+        [Parameter(Mandatory)]
+        [bool]$Interactive
+    )
+
+    $settings = [ordered]@{}
+    foreach ($role in $modelDefaults.Keys) {
+        $settings[$role] = $modelDefaults[$role]
+    }
+
+    if ($Interactive) {
+        foreach ($role in $modelDefaults.Keys) {
+            $settings[$role] = Get-ModelSetting -Role $role -Default $modelDefaults[$role]
+        }
+        return $settings
+    }
+
+    if (-not (Test-Path -LiteralPath $SidecarPath -PathType Leaf)) {
+        return $settings
+    }
+
+    try {
+        $parsed = Get-Content -Raw -Encoding utf8 -LiteralPath $SidecarPath | ConvertFrom-Json -NoEnumerate
+    }
+    catch {
+        throw "Malformed model settings JSON: $SidecarPath"
+    }
+
+    if ($null -eq $parsed -or
+        $parsed -isnot [System.Management.Automation.PSObject] -or
+        $parsed -is [array] -or
+        $parsed -is [string] -or
+        $parsed -is [System.ValueType]) {
+        throw "Malformed model settings JSON: $SidecarPath"
+    }
+
+    foreach ($property in $parsed.PSObject.Properties) {
+        if (-not $modelDefaults.Contains($property.Name)) {
+            throw "Malformed model settings JSON: unknown model role '$($property.Name)' in $SidecarPath"
+        }
+        if ($null -eq $property.Value) {
+            $settings[$property.Name] = $null
+            continue
+        }
+        if ($property.Value -isnot [string] -or [string]::IsNullOrWhiteSpace($property.Value) -or $property.Value -match '[\r\n]') {
+            throw "Malformed model settings JSON: invalid model for '$($property.Name)' in $SidecarPath"
+        }
+        $settings[$property.Name] = $property.Value
+    }
+
+    return $settings
+}
+
+function Save-ModelSettings {
+    param(
+        [Parameter(Mandatory)]
+        [string]$SidecarPath
+    )
+
+    $saved = [ordered]@{}
+    foreach ($role in $modelDefaults.Keys) {
+        if ($null -ne $modelSettings[$role]) {
+            $saved[$role] = $modelSettings[$role]
+        }
+    }
+
+    $parent = Split-Path -Parent $SidecarPath
+    New-Item -ItemType Directory -Force -Path $parent | Out-Null
+    Set-Content -Encoding utf8 -NoNewline -LiteralPath $SidecarPath -Value ($saved | ConvertTo-Json -Compress)
 }
 
 function Get-MarkerState {
@@ -296,6 +592,8 @@ if ($Scope -eq "Project") {
     }
 
     $targetRoot = (Resolve-Path -LiteralPath $ProjectPath).Path
+    $modelSidecar = Join-Path $targetRoot ".codex-orchestration-models.json"
+    $modelSettings = Read-ModelSettings -SidecarPath $modelSidecar -Interactive (-not $Check)
 
     if ($installCodex) {
         if ($Check) {
@@ -325,6 +623,10 @@ if ($Scope -eq "Project") {
     else {
         Copy-ManagedTree -SourceRoot (Join-Path $packageRoot ".agents/skills") -DestinationRoot (Join-Path $targetRoot ".agents/skills")
     }
+
+    if (-not $Check) {
+        Save-ModelSettings -SidecarPath $modelSidecar
+    }
 }
 else {
     $userHome = if ([string]::IsNullOrWhiteSpace($env:HOME)) { $HOME } else { $env:HOME }
@@ -334,6 +636,8 @@ else {
 
     $codexHome = if ([string]::IsNullOrWhiteSpace($env:CODEX_HOME)) { Join-Path $userHome ".codex" } else { $env:CODEX_HOME }
     $copilotHome = if ([string]::IsNullOrWhiteSpace($env:COPILOT_HOME)) { Join-Path $userHome ".copilot" } else { $env:COPILOT_HOME }
+    $modelSidecar = Join-Path $userHome ".codex-orchestration-models.json"
+    $modelSettings = Read-ModelSettings -SidecarPath $modelSidecar -Interactive (-not $Check)
 
     if ($installCodex) {
         if ($Check) {
@@ -363,6 +667,10 @@ else {
     }
     else {
         Copy-ManagedTree -SourceRoot (Join-Path $packageRoot ".agents/skills") -DestinationRoot (Join-Path $userHome ".agents/skills")
+    }
+
+    if (-not $Check) {
+        Save-ModelSettings -SidecarPath $modelSidecar
     }
 }
 
