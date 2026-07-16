@@ -7,6 +7,8 @@ description: Independently inspect and validate current code changes against a s
 
 Perform acceptance verification in a context that did not implement the change
 
+Only the parent task may dispatch the verifier; the spawned verifier must never spawn, delegate to, or invoke another agent
+
 ## Workflow
 
 1. Determine the requested scope from the text following `$verify`

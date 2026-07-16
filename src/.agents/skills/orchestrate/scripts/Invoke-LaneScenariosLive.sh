@@ -52,12 +52,31 @@ import base64, json, sys
 from pathlib import Path
 scenario = json.loads(base64.b64decode(sys.argv[1]))
 result = json.loads(Path(sys.argv[2]).read_text(encoding="utf-8"))
+roles = {"orchestration_planner", "orchestration_explorer", "orchestration_implementer", "orchestration_verifier"}
+assert set(result) == {"lane", "delegated_agents", "approval_required", "rationale"}
+assert result["lane"] in {"single-agent", "plan-light", "orchestrate-heavy"}
+assert isinstance(result["approval_required"], bool)
+assert isinstance(result["rationale"], str) and 1 <= len(result["rationale"]) <= 300
+agents = result["delegated_agents"]
+assert isinstance(agents, list)
+counts = {}
+for agent in agents:
+    assert isinstance(agent, dict) and set(agent) == {"role", "count"}
+    assert agent["role"] in roles
+    assert isinstance(agent["count"], int) and not isinstance(agent["count"], bool) and agent["count"] >= 1
+    assert agent["count"] <= 2 if agent["role"] == "orchestration_implementer" else agent["count"] == 1
+    assert agent["role"] not in counts
+    counts[agent["role"]] = agent["count"]
+subagent_count = sum(counts.values())
 assert result["lane"] in scenario["allowed_lanes"]
 assert result["approval_required"] == scenario["approval_required"]
-assert len(result["delegated_roles"]) <= scenario["max_subagents"]
-assert set(scenario["required_roles"]) <= set(result["delegated_roles"])
-assert set(result["delegated_roles"]) <= set(scenario["allowed_roles"])
-assert not set(result["delegated_roles"]) & set(scenario["forbidden_roles"])
+assert result["lane"] != "single-agent" or subagent_count == 0
+assert result["lane"] != "plan-light" or subagent_count <= 1
+assert subagent_count <= scenario["max_subagents"]
+assert set(scenario["required_roles"]) <= set(counts)
+assert set(counts) <= set(scenario["allowed_roles"])
+assert not set(counts) & set(scenario["forbidden_roles"])
+assert all(count <= scenario["max_role_counts"][role] for role, count in counts.items())
 PYTHON
     printf 'PASS: %s\n' "$scenario_id"
     passed=$((passed + 1))

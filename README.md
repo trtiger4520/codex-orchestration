@@ -34,9 +34,9 @@ Codex custom agent 固定使用表中的 `model_reasoning_effort`，避免所有
 
 - `single-agent`：已知路徑、局部修改，或可由確定性工具直接驗證的日常低風險工作，不建立子代理
 - `plan-light`：需要短計畫的非高風險工作，預設零子代理；如委派具明確收益，最多從 explorer、implementer、verifier 選一種角色且只派一個
-- `orchestrate-heavy`：僅限使用者明確要求完整協作，或涉及安全、資料遷移、正式部署、核心架構、破壞性公開契約的高風險工作
+- `orchestrate-heavy`：僅限使用者明確要求完整協作，或工作會修改安全敏感行為或控制、遷移或轉換持久化資料或 schema、改變正式環境狀態、修改核心架構、造成 breaking public contract
 
-檔案數、步驟數、跨模組、跨平台與陌生路徑都不會單獨觸發完整流程；單獨要求獨立驗證時只需增加 verifier，不強制建立其他角色
+檔案數、步驟數、跨模組、跨平台與陌生路徑都不會單獨觸發完整流程；純唯讀的安全、migration、部署或架構分析依一般 delegation gate 使用 `single-agent` 或 `plan-light`；單獨要求獨立驗證時只需增加 verifier，不強制建立其他角色
 
 ### 委派閘門
 
@@ -53,22 +53,25 @@ Codex custom agent 固定使用表中的 `model_reasoning_effort`，避免所有
 
 ### 完成紀錄
 
-每個任務完成時只輸出一筆精簡 JSON，不自動寫入 repository。欄位包含 `lane`、`delegated_role`、`delegation_reason`、`subagent_count`、`dispatch_status`、`dispatch_error`、`repair_cycles`、`verification_result`、`files_changed`，以及有工具證據時才填值的 `input_tokens`、`output_tokens`、`elapsed_seconds`；沒有證據或不適用時使用 `null`
+每個任務完成時只輸出一筆精簡 JSON，不自動寫入 repository。欄位包含 `lane`、`delegated_agents`、`delegation_reason`、`subagent_count`、`dispatch_status`、`dispatch_error`、`repair_cycles`、`verification_result`、`files_changed`，以及有工具證據時才填值的 `input_tokens`、`output_tokens`、`elapsed_seconds`；`delegated_agents` 使用唯一的 `{ "role": "<role>", "count": <count> }` 項目，planner、explorer、verifier 的 count 固定為 `1`，implementer 可為 `1` 或 `2`，`subagent_count` 必須等於所有 `count` 總和；未委派時使用空陣列與 `0`
 
 `orchestrate-heavy` 流程如下：
 
 1. 派發前確認作業系統，以及 PowerShell、Bash、Python 或 bundled runtime 等驗證工具鏈
-2. planner 檢查實際專案，產生 200 字內 Markdown 摘要及符合 schema 的 JSON task contract，並按 cohesive delivery unit 分組，不機械拆分產品碼、測試與文件
-3. 主代理向使用者顯示計畫並等待明確核准
-4. explorer 只針對仍不清楚的程式路徑補充證據
-5. 主代理檢查可用 slots、風險、相依關係與檔案衝突，使用最少 writers 且最多兩個，高風險工作固定單 writer
-6. implementer 各自處理一個完整且已核准的交付單元；`plan-light` implementer 則可處理邊界穩定且驗收條件清楚的 bounded task，不要求 heavy plan
-7. 若派發收到 `Selected model is at capacity` 或等效的暫時性子代理可用性錯誤，主代理會在 30 秒、90 秒後，以原角色與未變更的子任務各重派一次
-8. 兩次重派仍失敗時，回報原始錯誤與未完成子任務，不臆測可用模型、不自動 fallback，也不變更已核准範圍
-9. parent 審查結構化驗證命令，未另行核准時拒絕 shell chaining、重導向、套件安裝、網路存取與破壞性操作
-10. verifier 前後使用 source-boundary guard 比較 tracked 與 non-ignored untracked 檔案雜湊，只允許已審查的 build/test artifact globs
-11. verifier 以單一獨立 context 檢查完整變更並親自執行測試；來源檔案越界時驗證結果失效
-12. 驗收失敗時交回原 implementer context，並由同一 verifier context 複驗；每次只重跑失敗檢查，blocker 清除後完整套件只執行一次，最多兩次修正循環
+2. planner 檢查實際專案，產生 200 字內 Markdown 摘要及恰好一個符合 schema 的 fenced JSON task contract，並按 cohesive delivery unit 分組，不機械拆分產品碼、測試與文件
+3. 主代理將 contract 寫入 repository 外的作業系統暫存目錄，Windows 執行 PowerShell validator，macOS／Linux 執行 Bash validator
+4. contract 擷取或驗證失敗時立即停止，不進行命令審查、使用者核准或任何派發，並回報 validator 錯誤
+5. contract 通過後，parent 才審查結構化驗證命令；未另行核准時拒絕 shell chaining、重導向、套件安裝、網路存取與破壞性操作
+6. 主代理向使用者顯示已驗證計畫並等待明確核准
+7. explorer 只針對仍不清楚的程式路徑補充證據
+8. 主代理檢查可用 slots、風險、相依關係與檔案衝突，使用最少 writers 且最多兩個，高風險工作固定單 writer
+9. implementer 各自處理一個完整且已核准的交付單元；`plan-light` implementer 則可處理邊界穩定且驗收條件清楚的 bounded task，不要求 heavy plan
+10. 若派發收到 `Selected model is at capacity` 或等效的暫時性子代理可用性錯誤，主代理會在 30 秒、90 秒後，以原角色與未變更的子任務各重派一次
+11. 兩次重派仍失敗時，回報原始錯誤與未完成子任務，不臆測可用模型、不自動 fallback，也不變更已核准範圍
+12. verifier 前後使用 source-boundary guard 比較 tracked 與 non-ignored untracked 檔案雜湊，只允許已審查的 build/test artifact globs
+13. verifier 以單一獨立 context 檢查完整變更並親自執行測試；來源檔案越界時驗證結果失效
+14. 驗收失敗時交回原 implementer context，並由同一 verifier context 複驗；每次只重跑失敗檢查，blocker 清除後完整套件只執行一次，最多兩次修正循環
+15. 工作流程成功或失敗結束時都清除暫存 contract
 
 子代理協調優先使用介面原生工具與事件式等待，不把等待包進一般 `exec`；介面沒有事件式等待時，每 30 至 60 秒檢查一次，只有狀態變化才回報；測試命名、格式偏好或已有等效覆蓋的追溯性意見列為 non-blocking note
 
@@ -79,6 +82,8 @@ Codex custom agent 固定使用表中的 `model_reasoning_effort`，避免所有
 max_threads = 3
 max_depth = 1
 ```
+
+只有 root task 可以派發子代理；任何 spawned agent 都不得再 spawn、delegate 或 invoke 其他 agent。`max_depth = 1` 是第二層遞迴保護，不取代角色本身的禁止委派規則
 
 動態 read 併發與最多兩個 writers 都是工作流程規則，不是服務端容量預查，也不會為提高併發指定模型或修改 thread 上限
 
@@ -223,6 +228,8 @@ bash ./tests/Test-SourceBoundary.sh
 ### Lane scenario eval
 
 版本化案例矩陣位於 `.agents/skills/orchestrate/references/lane-scenarios.v1.json`，涵蓋已知 DTO、陌生登入流程、CRUD、CI log、獨立驗證、EF Core migration、authentication policy、多文件機械修改與完整交付單元。日常 deterministic test 只驗證格式、角色集合與 lane invariants，不呼叫模型
+
+lane scenario matrix 使用 v1.1，透過 `delegated_agents` 的 role/count 與 `max_role_counts` 驗證實際 agent instance 數量、高風險單 writer、plan-light 單 agent 與重複角色限制
 
 需要觀察實際分類行為時，可選配執行 live runner；它會在暫存 Git repository 載入 `src/AGENTS.md`，以 `codex exec --sandbox read-only --output-schema` 逐案判斷。預設沿用目前 Codex 模型，也可用 `-Model` 或 `--model` 指定模型。此測試需要 Codex CLI、有效登入及網路，不屬於日常 package tests
 

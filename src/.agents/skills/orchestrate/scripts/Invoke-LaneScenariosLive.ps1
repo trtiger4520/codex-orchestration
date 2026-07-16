@@ -43,12 +43,23 @@ Task: $($scenario.prompt)
             throw "Invalid result for scenario '$($scenario.id)'"
         }
         $result = $resultJson | ConvertFrom-Json -Depth 20
+        $roleCounts = @{}
+        $subagentCount = 0
+        foreach ($agent in $result.delegated_agents) {
+            if ($roleCounts.ContainsKey($agent.role)) { throw "Scenario '$($scenario.id)' returned duplicate role '$($agent.role)'" }
+            $roleCounts[$agent.role] = $agent.count
+            $subagentCount += $agent.count
+        }
         if ($result.lane -notin $scenario.allowed_lanes) { throw "Scenario '$($scenario.id)' selected disallowed lane '$($result.lane)'" }
         if ($result.approval_required -ne $scenario.approval_required) { throw "Scenario '$($scenario.id)' selected the wrong approval behavior" }
-        if ($result.delegated_roles.Count -gt $scenario.max_subagents) { throw "Scenario '$($scenario.id)' exceeded its subagent limit" }
-        foreach ($role in $scenario.required_roles) { if ($role -notin $result.delegated_roles) { throw "Scenario '$($scenario.id)' omitted required role '$role'" } }
-        foreach ($role in $result.delegated_roles) {
+        if ($result.lane -eq 'single-agent' -and $subagentCount -ne 0) { throw "Scenario '$($scenario.id)' delegated from single-agent" }
+        if ($result.lane -eq 'plan-light' -and $subagentCount -gt 1) { throw "Scenario '$($scenario.id)' exceeded the plan-light subagent limit" }
+        if ($subagentCount -gt $scenario.max_subagents) { throw "Scenario '$($scenario.id)' exceeded its subagent limit" }
+        foreach ($role in $scenario.required_roles) { if (-not $roleCounts.ContainsKey($role)) { throw "Scenario '$($scenario.id)' omitted required role '$role'" } }
+        foreach ($role in $roleCounts.Keys) {
             if ($role -notin $scenario.allowed_roles -or $role -in $scenario.forbidden_roles) { throw "Scenario '$($scenario.id)' selected disallowed role '$role'" }
+            $limit = $scenario.max_role_counts.PSObject.Properties | Where-Object Name -EQ $role | Select-Object -First 1
+            if ($null -eq $limit -or $roleCounts[$role] -gt $limit.Value) { throw "Scenario '$($scenario.id)' exceeded the role limit for '$role'" }
         }
         $passed++
         Write-Output "PASS: $($scenario.id)"

@@ -4,6 +4,7 @@ sandbox_mode = "workspace-write"
 model_reasoning_effort = "high"
 developer_instructions = """
 Independently verify the completed work and never edit source files
+Never spawn, delegate to, or invoke another agent
 
 Workspace write access exists only so builds and tests may create normal artifacts
 Inspect the actual diff or changed files and check every approved acceptance criterion

@@ -7,6 +7,7 @@ user-invocable: true
 ---
 
 Inspect the real project before planning and never modify files
+Never spawn, delegate to, or invoke another agent
 
 Group the request into the smallest dependency-ordered cohesive delivery units that preserve the requested scope
 Keep product code, tests, and documentation together when they form one delivery unit instead of mechanically assigning them to separate agents
@@ -16,6 +17,7 @@ Call out architecture-changing ambiguity and recommend one explicit choice for t
 Return exactly two sections:
 1. A Markdown summary no longer than 200 characters for user approval
 2. A fenced `json` block that conforms to the orchestrate skill reference `orchestration-plan.schema.json`
+Emit exactly one fenced `json` block and no other fenced blocks
 
 The contract root must contain `version`, `lane`, `summary`, and `tasks`
 Each task must contain `id`, `mode`, `goal`, `files`, `depends_on`, `risk`, `acceptance_criteria`, and `verify_cmds`

@@ -4,21 +4,39 @@
   "title": "Lane evaluation result",
   "type": "object",
   "additionalProperties": false,
-  "required": ["lane", "delegated_roles", "approval_required", "rationale"],
+  "required": ["lane", "delegated_agents", "approval_required", "rationale"],
   "properties": {
     "lane": {
       "type": "string",
       "enum": ["single-agent", "plan-light", "orchestrate-heavy"]
     },
-    "delegated_roles": {
+    "delegated_agents": {
       "type": "array",
       "uniqueItems": true,
-      "items": {
-        "type": "string",
-        "enum": ["orchestration_planner", "orchestration_explorer", "orchestration_implementer", "orchestration_verifier"]
-      }
+      "items": { "$ref": "#/definitions/delegatedAgent" }
     },
     "approval_required": { "type": "boolean" },
     "rationale": { "type": "string", "minLength": 1, "maxLength": 300 }
+  },
+  "definitions": {
+    "delegatedAgent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "count"],
+      "properties": {
+        "role": {
+          "type": "string",
+          "enum": ["orchestration_planner", "orchestration_explorer", "orchestration_implementer", "orchestration_verifier"]
+        },
+        "count": { "type": "integer", "minimum": 1 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "role": { "const": "orchestration_implementer" } }, "required": ["role"] },
+          "then": { "properties": { "count": { "maximum": 2 } } },
+          "else": { "properties": { "count": { "const": 1 } } }
+        }
+      ]
+    }
   }
 }

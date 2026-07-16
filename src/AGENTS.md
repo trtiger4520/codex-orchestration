@@ -9,7 +9,8 @@
 - Select `orchestration_implementer` only for a bounded cohesive delivery unit with stable ownership and observable acceptance criteria
 - Select `orchestration_verifier` only when independent verification is explicitly requested or materially valuable; do not add planner, explorer, or implementer roles for verification alone
 - Never combine planner, explorer, implementer, and verifier roles within `plan-light`
-- Use `orchestrate-heavy` only when the user explicitly requests the complete orchestration workflow, or when the work involves security, data migration, production deployment, core architecture, or a breaking public contract
+- Use `orchestrate-heavy` only when the user explicitly requests the complete orchestration workflow, or when the requested change modifies security-sensitive behavior or controls, migrates or transforms persisted data or schema, changes production state, changes core architecture, or breaks a public contract
+- Keep read-only security, migration, deployment, and architecture analysis in `single-agent` or `plan-light`; independent verification alone remains verifier-only `plan-light`
 - File count, step count, cross-module scope, cross-platform scope, and unfamiliar paths must not trigger `orchestrate-heavy` by themselves
 - Keep the main agent responsible for user communication, approval, integration, command review, and the final report
 
@@ -28,23 +29,29 @@
 
 ## Dispatch and coordination
 
+- Only the root task may dispatch subagents; every spawned agent must never spawn, delegate to, or invoke another agent
 - Before dispatching, confirm the operating system and required verification toolchain, including PowerShell, Bash, Python, and any bundled runtime needed by the task
 - Prefer native subagent tools and event-driven waiting; never wrap subagent waiting in a general `exec` command
 - When event-driven waiting is unavailable, poll every 30 to 60 seconds and report only state changes
 - Keep delegated reports concise and summarize reports longer than roughly 300 words
 - For `orchestrate-heavy`, ask `orchestration_planner` to inspect the project and group the contract by cohesive delivery units rather than mechanically separating product code, tests, and documentation
-- Present the heavy plan and wait for explicit user approval before changing files
+- Require exactly one fenced JSON contract from the planner, write it to an operating-system temporary directory outside the repository, and validate it with the platform script before command review, user approval, or dispatch
+- Stop without approval or dispatch when contract extraction or validation fails, report the validator errors, and remove the temporary contract when the workflow ends
+- Review every declarative verification command only after contract validation; reject shell chaining, redirection, package installation, network access, and destructive commands unless separately required and explicitly approved
+- Present the validated heavy plan and wait for explicit user approval before changing files
 - After approval, check available slots and use `orchestration_explorer` only for unanswered code-path questions; use the minimum number of writers, at most two writers, and one writer for high-risk work
-- Review every declarative verification command before execution; reject shell chaining, redirection, package installation, network access, and destructive commands unless separately required and explicitly approved
 - Before independent verification, capture the repository source boundary; after verification, invalidate the result if tracked or non-ignored untracked files changed outside reviewed artifact globs
 - Send the complete approved change to one independent `orchestration_verifier`
 
 ## Completion record
 
 - Emit exactly one compact JSON object at task completion and do not write it to the repository automatically
-- Include `lane`, `delegated_role`, `delegation_reason`, `subagent_count`, `dispatch_status`, `dispatch_error`, `repair_cycles`, `verification_result`, and `files_changed`
+- Include `lane`, `delegated_agents`, `delegation_reason`, `subagent_count`, `dispatch_status`, `dispatch_error`, `repair_cycles`, `verification_result`, and `files_changed`
+- Represent `delegated_agents` as unique `{ "role": "<role>", "count": <count> }` entries; `subagent_count` must equal the sum of all counts
+- Use `count: 1` for planner, explorer, and verifier entries, and `count: 1` or `count: 2` for the implementer entry
+- Use `delegated_agents: []` and `subagent_count: 0` when no delegation occurred
 - Include `input_tokens`, `output_tokens`, and `elapsed_seconds` only from observed tool evidence; otherwise set them to `null`
-- Use `null` for `delegated_role`, `delegation_reason`, and `dispatch_error` when they do not apply
+- Use `null` for `delegation_reason` and `dispatch_error` when they do not apply
 
 ## Repair and verification
 

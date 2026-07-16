@@ -1,6 +1,6 @@
 ---
 name: orchestrate
-description: Coordinate an explicitly requested high-risk or complete orchestration workflow through planning, approval, cohesive implementation, independent verification, and up to two repair cycles. Use only when the user invokes $orchestrate, directly requests the complete workflow, or the work involves security, data migration, production deployment, core architecture, or a breaking public contract.
+description: Coordinate an explicitly requested complete orchestration workflow or a high-risk change that modifies security-sensitive behavior or controls, migrates or transforms persisted data or schema, changes production state, changes core architecture, or breaks a public contract.
 ---
 
 # Orchestrate
@@ -10,26 +10,31 @@ Coordinate an `orchestrate-heavy` task while keeping planning, implementation, a
 ## Workflow
 
 1. Confirm the operating system and required PowerShell, Bash, Python, or bundled runtime tools, then send the complete request to `orchestration_planner`
-2. Review the returned Markdown summary and JSON task contract for verified paths, dependencies, and observable acceptance criteria
+2. Require the planner response to contain exactly one fenced JSON task contract, extract it, and write it to an operating-system temporary directory outside the repository
+3. Validate the temporary contract before command review, user approval, or dispatch
    - Read `references/orchestration-plan.schema.json` when inspecting or producing the contract
-   - On PowerShell, run `scripts/Test-OrchestrationPlan.ps1 -PlanFile <path>` when a contract is materialized as JSON
-   - On Bash, run `scripts/Test-OrchestrationPlan.sh --plan-file <path>` when a contract is materialized as JSON
+   - On PowerShell, run `scripts/Test-OrchestrationPlan.ps1 -PlanFile <temporary-path>`
+   - On Bash, run `scripts/Test-OrchestrationPlan.sh --plan-file <temporary-path>`
    - Require newly produced contracts to use version `1.1` and structured `verify_cmds` entries containing `command`, `cwd`, `purpose`, `timeout_seconds`, and `expected_writes`
-3. Present the plan to the user and stop until the user explicitly approves it
-4. Require cohesive delivery units rather than separate contract tasks solely for product code, tests, or documentation; after approval, send only unanswered codebase questions to `orchestration_explorer`
-5. Before dispatching, check active subagents, available slots, task mode, risk, dependencies, and file-conflict clusters
-6. Assign each cohesive approved delivery unit to an `orchestration_implementer`
-7. Use available slots for independent read-only work; use the minimum number of writers, run at most two writers, use one writer for high-risk work, and serialize writers that share a file-conflict cluster
-8. Integrate the completed subtasks without expanding the approved scope
-9. Review every verification command, reject unapproved chaining, redirection, package installation, network access, and destructive operations, then capture a source-boundary snapshot with the verify skill scripts
-10. Send the approved plan and complete change set to `orchestration_verifier`
-11. Verify the source boundary afterward using only reviewed `expected_writes`; any other tracked or non-ignored untracked change invalidates the verifier result
-12. If verification returns FAIL, send only the blocking items to the original implementer context and verify again in the same verifier context
-13. Stop after two failed repair cycles and report the remaining blockers
+4. If extraction or validation fails, report the validator errors and stop without command review, user approval, or dispatch
+5. Review the validated contract for verified paths, dependencies, observable acceptance criteria, and safe verification commands
+6. Present the validated plan to the user and stop until the user explicitly approves it
+7. Require cohesive delivery units rather than separate contract tasks solely for product code, tests, or documentation; after approval, send only unanswered codebase questions to `orchestration_explorer`
+8. Before dispatching, check active subagents, available slots, task mode, risk, dependencies, and file-conflict clusters
+9. Assign each cohesive approved delivery unit to an `orchestration_implementer`
+10. Use available slots for independent read-only work; use the minimum number of writers, run at most two writers, use one writer for high-risk work, and serialize writers that share a file-conflict cluster
+11. Integrate the completed subtasks without expanding the approved scope
+12. Capture a source-boundary snapshot with the verify skill scripts
+13. Send the approved plan and complete change set to `orchestration_verifier`
+14. Verify the source boundary afterward using only reviewed `expected_writes`; any other tracked or non-ignored untracked change invalidates the verifier result
+15. If verification returns FAIL, send only the blocking items to the original implementer context and verify again in the same verifier context
+16. Stop after two failed repair cycles and report the remaining blockers
+17. Remove the temporary contract when the workflow ends, whether it succeeds or fails
 
 ## Coordination rules
 
 - Keep user communication and approval decisions in the parent task
+- Only the parent task may dispatch; every spawned agent must never spawn, delegate to, or invoke another agent
 - Prefer native subagent tools and event-driven waiting; never wrap subagent waiting in general `exec`
 - If event-driven waiting is unavailable, poll every 30 to 60 seconds and report only state changes
 - Pass only task-relevant findings between agents
@@ -49,4 +54,4 @@ Coordinate an `orchestrate-heavy` task while keeping planning, implementation, a
 
 Report changed files, verification commands and outcomes, acceptance criteria status, and remaining follow-ups
 
-Emit exactly one compact JSON completion record with the fields required by the installed orchestration policy; use `null` for unavailable metrics and do not save the record automatically
+Emit exactly one compact JSON completion record with `delegated_agents` role/count entries and the fields required by the installed orchestration policy; use `null` for unavailable metrics and do not save the record automatically

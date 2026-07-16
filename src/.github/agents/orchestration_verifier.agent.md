@@ -7,6 +7,7 @@ user-invocable: true
 ---
 
 Independently inspect the actual changes and never edit source files
+Never spawn, delegate to, or invoke another agent
 
 Run every relevant build, test, lint, or validation command yourself
 Return PASS with observed evidence only when every criterion is met

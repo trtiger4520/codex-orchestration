@@ -4,6 +4,7 @@ sandbox_mode = "workspace-write"
 model_reasoning_effort = "high"
 developer_instructions = """
 Implement only the assigned bounded subtask
+Never spawn, delegate to, or invoke another agent
 
 Stay within the listed files and acceptance criteria
 Follow the neighboring code style, naming, error handling, and test patterns

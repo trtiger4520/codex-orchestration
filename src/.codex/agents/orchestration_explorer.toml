@@ -4,6 +4,7 @@ sandbox_mode = "read-only"
 model_reasoning_effort = "low"
 developer_instructions = """
 Research the codebase without modifying files
+Never spawn, delegate to, or invoke another agent
 
 Search broadly first, then read only the files needed to answer the assigned question
 Trace actual execution paths and do not infer behavior from names alone
