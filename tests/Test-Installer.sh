@@ -85,20 +85,20 @@ check_model_defaults() {
     mkdir -p "$project"
     printf '%s\n' inherit '' '' inherit | bash "$installer" --scope project --platform all --project-path "$project"
     sidecar="$project/.codex-orchestration-models.json"
-    [ "$(cat "$sidecar")" = '{"explorer":"5.6-luna","implementer":"5.6-luna"}' ]
+    [ "$(cat "$sidecar")" = '{"explorer":"gpt-5.6-luna","implementer":"gpt-5.6-luna"}' ]
 
     for role in planner verifier; do
         ! grep -Eq '^[[:space:]]*model[[:space:]]*=' "$project/.codex/agents/orchestration_$role.toml"
         ! grep -Eq '^model[[:space:]]*:' "$project/.github/agents/orchestration_$role.agent.md"
     done
     for role in explorer implementer; do
-        grep -F 'model = "5.6-luna"' "$project/.codex/agents/orchestration_$role.toml" >/dev/null
-        grep -F 'model: "5.6-luna"' "$project/.github/agents/orchestration_$role.agent.md" >/dev/null
+        grep -F 'model = "gpt-5.6-luna"' "$project/.codex/agents/orchestration_$role.toml" >/dev/null
+        grep -F 'model: "gpt-5.6-luna"' "$project/.github/agents/orchestration_$role.agent.md" >/dev/null
     done
 
     grep -F 'model_reasoning_effort = "medium"' "$project/.codex/agents/orchestration_planner.toml" >/dev/null
     grep -F 'model_reasoning_effort = "low"' "$project/.codex/agents/orchestration_explorer.toml" >/dev/null
-    grep -F 'model_reasoning_effort = "medium"' "$project/.codex/agents/orchestration_implementer.toml" >/dev/null
+    grep -F 'model_reasoning_effort = "high"' "$project/.codex/agents/orchestration_implementer.toml" >/dev/null
     grep -F 'model_reasoning_effort = "high"' "$project/.codex/agents/orchestration_verifier.toml" >/dev/null
     ! grep -R -F 'model_reasoning_effort' "$project/.github/agents" >/dev/null
 }
@@ -139,6 +139,19 @@ check_custom_models_and_read_only_check() {
     ! grep -F 'Model for ' "$check_output" >/dev/null
 }
 run_python_test "custom models are saved and Check is non-interactive and read-only" check_custom_models_and_read_only_check
+
+check_legacy_luna_sidecar() {
+    project="$test_root/model-legacy-luna"
+    mkdir -p "$project"
+    printf '%s\n' inherit 5.6-luna 5.6-luna inherit | bash "$installer" --scope project --platform all --project-path "$project"
+    before=$(snapshot "$project")
+    bash "$installer" --scope project --platform all --project-path "$project" --check < /dev/null
+    after=$(snapshot "$project")
+    [ "$before" = "$after" ]
+    grep -F '"explorer":"5.6-luna"' "$project/.codex-orchestration-models.json" >/dev/null
+    grep -F '"implementer":"5.6-luna"' "$project/.codex-orchestration-models.json" >/dev/null
+}
+run_python_test "legacy luna sidecar remains explicit and Check does not migrate it" check_legacy_luna_sidecar
 
 check_duplicate_scope_warning() {
     project="$test_root/duplicate-scope"

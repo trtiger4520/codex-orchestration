@@ -7,6 +7,8 @@ $ErrorActionPreference = "Stop"
 $pwsh = (Get-Process -Id $PID).Path
 $testScripts = @(
     "Test-Contract.ps1",
+    "Test-LaneScenarios.ps1",
+    "Test-SourceBoundary.ps1",
     "Test-Installer.ps1",
     "Test-Policy.ps1"
 )

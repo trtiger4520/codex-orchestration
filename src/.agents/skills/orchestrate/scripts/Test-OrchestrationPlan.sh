@@ -116,9 +116,10 @@ plan = load_json(plan_file, "Plan")
 try:
     root_required = schema["required"]
     root_properties = schema["properties"]
-    task_schema = schema["definitions"]["task"]
+    task_schema = schema["definitions"]["taskV1" if plan.get("version") == "1.0" else "taskV11"]
     task_required = task_schema["required"]
     task_properties = task_schema["properties"]
+    common_task_properties = schema["definitions"]["taskProperties"]
 except (KeyError, TypeError) as error:
     fail(f"Schema has an unsupported structure: {error}")
 
@@ -147,14 +148,50 @@ if validate_properties(plan, "Plan", root_required, root_properties, errors):
         if not validate_properties(task, context, task_required, task_properties, errors):
             continue
 
-        require_string(task.get("id"), f"{context}.id", errors, pattern=task_properties["id"]["pattern"])
-        require_enum(task.get("mode"), f"{context}.mode", task_properties["mode"]["enum"], errors)
+        require_string(task.get("id"), f"{context}.id", errors, pattern=common_task_properties["id"]["pattern"])
+        require_enum(task.get("mode"), f"{context}.mode", common_task_properties["mode"]["enum"], errors)
         require_string(task.get("goal"), f"{context}.goal", errors)
         require_string_list(task.get("files"), f"{context}.files", errors)
         require_string_list(task.get("depends_on"), f"{context}.depends_on", errors)
-        require_enum(task.get("risk"), f"{context}.risk", task_properties["risk"]["enum"], errors)
+        require_enum(task.get("risk"), f"{context}.risk", common_task_properties["risk"]["enum"], errors)
         require_string_list(task.get("acceptance_criteria"), f"{context}.acceptance_criteria", errors, minimum=1)
-        require_string_list(task.get("verify_cmds"), f"{context}.verify_cmds", errors)
+        commands = task.get("verify_cmds")
+        if not isinstance(commands, list):
+            errors.append(f"{context}.verify_cmds must be an array")
+            commands = []
+        elif plan.get("version") == "1.0":
+            require_string_list(commands, f"{context}.verify_cmds", errors)
+        else:
+            command_schema = schema["definitions"]["verificationCommand"]
+            command_required = command_schema["required"]
+            command_properties = command_schema["properties"]
+            for command_index, command in enumerate(commands):
+                command_context = f"{context}.verify_cmds[{command_index}]"
+                if not validate_properties(command, command_context, command_required, command_properties, errors):
+                    continue
+                require_string(command.get("command"), f"{command_context}.command", errors)
+                require_string(command.get("cwd"), f"{command_context}.cwd", errors)
+                require_string(command.get("purpose"), f"{command_context}.purpose", errors)
+                timeout = command.get("timeout_seconds")
+                if not isinstance(timeout, int) or isinstance(timeout, bool) or not 1 <= timeout <= 86400:
+                    errors.append(f"{command_context}.timeout_seconds must be an integer from 1 to 86400")
+                require_string_list(command.get("expected_writes"), f"{command_context}.expected_writes", errors)
+                expected_writes = command.get("expected_writes")
+                if (
+                    isinstance(expected_writes, list)
+                    and all(isinstance(path, str) for path in expected_writes)
+                    and len(expected_writes) != len(set(expected_writes))
+                ):
+                    errors.append(f"{command_context}.expected_writes must not contain duplicate entries")
+                for path_name in ("cwd",):
+                    path = command.get(path_name)
+                    normalized_path = path.replace("\\", "/") if isinstance(path, str) else path
+                    if isinstance(path, str) and (Path(normalized_path).is_absolute() or ".." in Path(normalized_path).parts or re.match(r"^[A-Za-z]:", path)):
+                        errors.append(f"{command_context}.{path_name} must be repository-relative")
+                for path in command.get("expected_writes", []) if isinstance(command.get("expected_writes"), list) else []:
+                    normalized_path = path.replace("\\", "/") if isinstance(path, str) else path
+                    if isinstance(path, str) and (Path(normalized_path).is_absolute() or ".." in Path(normalized_path).parts or re.match(r"^[A-Za-z]:", path)):
+                        errors.append(f"{command_context}.expected_writes must be repository-relative")
 
         task_id = task.get("id")
         if isinstance(task_id, str) and task_id:

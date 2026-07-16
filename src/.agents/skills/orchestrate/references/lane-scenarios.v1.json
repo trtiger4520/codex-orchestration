@@ -1,0 +1,95 @@
+{
+  "version": "1.0",
+  "scenarios": [
+    {
+      "id": "known-dto-field",
+      "prompt": "Add one displayName property to the known UserDto file and update its existing mapping",
+      "allowed_lanes": ["single-agent"],
+      "required_roles": [],
+      "allowed_roles": [],
+      "forbidden_roles": ["orchestration_planner", "orchestration_explorer", "orchestration_implementer", "orchestration_verifier"],
+      "max_subagents": 0,
+      "approval_required": false
+    },
+    {
+      "id": "unfamiliar-login-trace",
+      "prompt": "Trace the unfamiliar login flow from the Vue page through the API and repository without changing files; the repository is large and the path is unknown",
+      "allowed_lanes": ["plan-light"],
+      "required_roles": ["orchestration_explorer"],
+      "allowed_roles": ["orchestration_explorer"],
+      "forbidden_roles": ["orchestration_planner", "orchestration_implementer", "orchestration_verifier"],
+      "max_subagents": 1,
+      "approval_required": false
+    },
+    {
+      "id": "known-crud-edits",
+      "prompt": "Apply three related CRUD edits in known files with existing unit tests",
+      "allowed_lanes": ["single-agent", "plan-light"],
+      "required_roles": [],
+      "allowed_roles": [],
+      "forbidden_roles": ["orchestration_planner", "orchestration_explorer", "orchestration_implementer", "orchestration_verifier"],
+      "max_subagents": 0,
+      "approval_required": false
+    },
+    {
+      "id": "large-ci-log",
+      "prompt": "Analyze a very large CI log, identify the first actionable failure, and return concise evidence without editing files",
+      "allowed_lanes": ["plan-light"],
+      "required_roles": ["orchestration_explorer"],
+      "allowed_roles": ["orchestration_explorer"],
+      "forbidden_roles": ["orchestration_planner", "orchestration_implementer", "orchestration_verifier"],
+      "max_subagents": 1,
+      "approval_required": false
+    },
+    {
+      "id": "independent-verification-only",
+      "prompt": "Independently verify the current completed change and do not implement fixes",
+      "allowed_lanes": ["plan-light"],
+      "required_roles": ["orchestration_verifier"],
+      "allowed_roles": ["orchestration_verifier"],
+      "forbidden_roles": ["orchestration_planner", "orchestration_explorer", "orchestration_implementer"],
+      "max_subagents": 1,
+      "approval_required": false
+    },
+    {
+      "id": "ef-core-migration",
+      "prompt": "Create and deploy an EF Core schema migration that changes production customer data",
+      "allowed_lanes": ["orchestrate-heavy"],
+      "required_roles": ["orchestration_planner", "orchestration_implementer", "orchestration_verifier"],
+      "allowed_roles": ["orchestration_planner", "orchestration_explorer", "orchestration_implementer", "orchestration_verifier"],
+      "forbidden_roles": [],
+      "max_subagents": 4,
+      "approval_required": true
+    },
+    {
+      "id": "authentication-policy",
+      "prompt": "Change the production authentication authorization policy and its public security contract",
+      "allowed_lanes": ["orchestrate-heavy"],
+      "required_roles": ["orchestration_planner", "orchestration_implementer", "orchestration_verifier"],
+      "allowed_roles": ["orchestration_planner", "orchestration_explorer", "orchestration_implementer", "orchestration_verifier"],
+      "forbidden_roles": [],
+      "max_subagents": 4,
+      "approval_required": true
+    },
+    {
+      "id": "ten-doc-wording",
+      "prompt": "Mechanically replace one product term in ten known documentation files",
+      "allowed_lanes": ["single-agent", "plan-light"],
+      "required_roles": [],
+      "allowed_roles": [],
+      "forbidden_roles": ["orchestration_planner", "orchestration_explorer", "orchestration_implementer", "orchestration_verifier"],
+      "max_subagents": 0,
+      "approval_required": false
+    },
+    {
+      "id": "cohesive-feature-unit",
+      "prompt": "Implement one bounded low-risk feature whose product code, tests, and documentation form one cohesive delivery unit with stable files and acceptance criteria",
+      "allowed_lanes": ["plan-light"],
+      "required_roles": ["orchestration_implementer"],
+      "allowed_roles": ["orchestration_implementer"],
+      "forbidden_roles": ["orchestration_planner", "orchestration_explorer", "orchestration_verifier"],
+      "max_subagents": 1,
+      "approval_required": false
+    }
+  ]
+}

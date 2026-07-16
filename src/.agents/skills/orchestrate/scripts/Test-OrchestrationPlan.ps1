@@ -15,6 +15,17 @@ function Add-ValidationError {
     $script:validationErrors.Add($Message)
 }
 
+function Test-RepositoryRelativePath {
+    param([Parameter(Mandatory)][string]$Path)
+
+    if ([System.IO.Path]::IsPathRooted($Path) -or $Path -match '^(?:[A-Za-z]:|[\\/]{1,2})') {
+        return $false
+    }
+
+    $segments = $Path -split '[\\/]'
+    return -not ($segments -contains '..')
+}
+
 $PlanFile = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($PlanFile)
 $SchemaFile = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($SchemaFile)
 
@@ -73,6 +84,20 @@ foreach ($task in $plan.tasks) {
 
         if ($task.verify_cmds.Count -eq 0) {
             Add-ValidationError "Write task '$($task.id)' must declare at least one verification command"
+        }
+    }
+
+    if ($plan.version -eq '1.1') {
+        foreach ($verification in $task.verify_cmds) {
+            if (-not (Test-RepositoryRelativePath -Path $verification.cwd)) {
+                Add-ValidationError "Task '$($task.id)' verification cwd must be repository-relative: $($verification.cwd)"
+            }
+
+            foreach ($expectedWrite in $verification.expected_writes) {
+                if (-not (Test-RepositoryRelativePath -Path $expectedWrite)) {
+                    Add-ValidationError "Task '$($task.id)' expected write must be repository-relative: $expectedWrite"
+                }
+            }
         }
     }
 }

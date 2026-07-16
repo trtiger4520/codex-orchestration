@@ -75,6 +75,59 @@ run_case 'valid-plan-light' pass '{
   }]
 }'
 
+run_case 'valid-v1.1-structured-command' pass '{
+  "version": "1.1",
+  "lane": "plan-light",
+  "summary": "Validate structured verification",
+  "tasks": [{
+    "id": "change",
+    "mode": "write",
+    "goal": "Complete change",
+    "files": ["README.md"],
+    "depends_on": [],
+    "risk": "low",
+    "acceptance_criteria": ["change is complete"],
+    "verify_cmds": [{
+      "command": "git diff --check",
+      "cwd": ".",
+      "purpose": "diff-validation",
+      "timeout_seconds": 60,
+      "expected_writes": []
+    }]
+  }]
+}'
+
+run_case 'invalid-v1.1-string-command' fail '{
+  "version": "1.1",
+  "lane": "plan-light",
+  "summary": "Reject legacy command shape",
+  "tasks": [{
+    "id": "change", "mode": "write", "goal": "Complete change", "files": ["README.md"], "depends_on": [], "risk": "low", "acceptance_criteria": ["change is complete"], "verify_cmds": ["git diff --check"]
+  }]
+}'
+
+run_case 'invalid-v1.1-parent-write' fail '{
+  "version": "1.1",
+  "lane": "plan-light",
+  "summary": "Reject parent traversal",
+  "tasks": [{
+    "id": "change", "mode": "write", "goal": "Complete change", "files": ["README.md"], "depends_on": [], "risk": "low", "acceptance_criteria": ["change is complete"], "verify_cmds": [{
+      "command": "git diff --check", "cwd": ".", "purpose": "diff-validation", "timeout_seconds": 60, "expected_writes": ["../outside/**"]
+    }]
+  }]
+}'
+
+run_case 'invalid-v1.1-duplicate-expected-write' fail '{
+  "version": "1.1",
+  "lane": "plan-light",
+  "summary": "Reject duplicate artifact globs",
+  "tasks": [{
+    "id": "change", "mode": "write", "goal": "Complete change", "files": ["README.md"], "depends_on": [], "risk": "low", "acceptance_criteria": ["change is complete"], "verify_cmds": [{
+      "command": "dotnet test", "cwd": ".", "purpose": "test", "timeout_seconds": 60, "expected_writes": ["**/bin/**", "**/bin/**"]
+    }]
+  }]
+}'
+
 run_case 'valid-orchestrate-heavy' pass '{
   "version": "1.0",
   "lane": "orchestrate-heavy",

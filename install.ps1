@@ -25,8 +25,8 @@ $installCopilot = $Platform -in @("Copilot", "All")
 $drift = [System.Collections.Generic.List[object]]::new()
 $modelDefaults = [ordered]@{
     planner = $null
-    explorer = "5.6-luna"
-    implementer = "5.6-luna"
+    explorer = "gpt-5.6-luna"
+    implementer = "gpt-5.6-luna"
     verifier = $null
 }
 $modelSettings = [ordered]@{}

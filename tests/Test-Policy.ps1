@@ -2,112 +2,79 @@
 param()
 
 Set-StrictMode -Version Latest
-$ErrorActionPreference = "Stop"
-
+$ErrorActionPreference = 'Stop'
 $repositoryRoot = Split-Path $PSScriptRoot -Parent
 
-function Get-RepositoryContent {
-    param([Parameter(Mandatory)][string]$Path)
-
-    return Get-Content -Raw -Encoding utf8 -LiteralPath (Join-Path $repositoryRoot $Path)
+function Read-RepoFile([string]$Path) { Get-Content -Raw -Encoding utf8 -LiteralPath (Join-Path $repositoryRoot $Path) }
+function Assert-Contains([string]$Content, [string]$Expected, [string]$Context) {
+    if (-not $Content.Contains($Expected)) { throw "$Context is missing '$Expected'" }
 }
 
-function Assert-Contains {
-    param(
-        [Parameter(Mandatory)][string]$Content,
-        [Parameter(Mandatory)][string]$Expected,
-        [Parameter(Mandatory)][string]$Context
-    )
+$sourceRoot = Join-Path $repositoryRoot 'src'
+$agents = Read-RepoFile 'src\AGENTS.md'
+$skill = Read-RepoFile 'src\.agents\skills\orchestrate\SKILL.md'
+$verifySkill = Read-RepoFile 'src\.agents\skills\verify\SKILL.md'
+$readme = Read-RepoFile 'README.md'
+$copilotUser = Read-RepoFile 'src\.github\copilot-user-instructions.md'
+$planner = Read-RepoFile 'src\.codex\agents\orchestration_planner.toml'
+$implementer = Read-RepoFile 'src\.codex\agents\orchestration_implementer.toml'
+$openAiMetadata = Read-RepoFile 'src\.agents\skills\orchestrate\agents\openai.yaml'
 
-    if (-not $Content.Contains($Expected)) {
-        throw "$Context is missing '$Expected'"
-    }
+foreach ($lane in @('single-agent', 'plan-light', 'orchestrate-heavy')) {
+    foreach ($item in @($agents, $readme, $copilotUser)) { Assert-Contains $item $lane 'Lane policy' }
 }
-
-$sourceRoot = Join-Path $repositoryRoot "src"
-$agents = Get-RepositoryContent "src\AGENTS.md"
-$skill = Get-RepositoryContent "src\.agents\skills\orchestrate\SKILL.md"
-$readme = Get-RepositoryContent "README.md"
-$copilotUser = Get-RepositoryContent "src\.github\copilot-user-instructions.md"
-$openAiMetadata = Get-RepositoryContent "src\.agents\skills\orchestrate\agents\openai.yaml"
-
-foreach ($lane in @("single-agent", "plan-light", "orchestrate-heavy")) {
-    Assert-Contains -Content $agents -Expected $lane -Context "AGENTS.md"
-    Assert-Contains -Content $readme -Expected $lane -Context "README.md"
-    Assert-Contains -Content $copilotUser -Expected $lane -Context "Copilot user instructions"
-}
-
-foreach ($content in @($agents, $skill, $copilotUser)) {
-    Assert-Contains -Content $content -Expected "available slots" -Context "Concurrency policy"
-    Assert-Contains -Content $content -Expected "at most two" -Context "Writer limit"
-    Assert-Contains -Content $content -Expected "30 seconds" -Context "Capacity retry"
-    Assert-Contains -Content $content -Expected "90 seconds" -Context "Capacity retry"
-    Assert-Contains -Content $content -Expected "子代理使用" -Context "Subagent usage plan"
-    Assert-Contains -Content $content -Expected "模式" -Context "Subagent usage plan"
-    Assert-Contains -Content $content -Expected "不使用原因" -Context "Subagent usage plan"
-    Assert-Contains -Content $content -Expected "子代理結果" -Context "Subagent usage outcome"
-    Assert-Contains -Content $content -Expected "已派發，角色與任務" -Context "Subagent usage outcome"
-    Assert-Contains -Content $content -Expected "未使用或派發失敗原因" -Context "Subagent usage outcome"
-}
-
 foreach ($expected in @(
-    "do not create a subagent or wait for plan approval",
-    "at most one cohesive delivery unit",
-    "independent verification alone may add only",
-    "security, data migration, production deployment, core architecture, or a breaking public contract",
+    'defaults to zero subagents',
+    'at most one of `orchestration_explorer`, `orchestration_implementer`, or `orchestration_verifier`',
+    'at least two of these signals',
+    'limited local exploration first',
+    'Never combine planner, explorer, implementer, and verifier roles within `plan-light`',
+    'security, data migration, production deployment, core architecture, or a breaking public contract',
     'must not trigger `orchestrate-heavy` by themselves',
-    "event-driven waiting",
-    "30 to 60 seconds",
-    "original implementer context",
-    "same independent verifier context",
-    "complete relevant suite once",
-    "non-blocking notes"
-)) {
-    Assert-Contains -Content $agents -Expected $expected -Context "Optimized orchestration policy"
-}
+    'Review every declarative verification command',
+    'source boundary',
+    'exactly one compact JSON object',
+    'input_tokens',
+    'event-driven waiting',
+    'original implementer context',
+    'same independent verifier context',
+    'Stop after two failed repair cycles',
+    '30 seconds',
+    '90 seconds'
+)) { Assert-Contains $agents $expected 'Optimized orchestration policy' }
 
-Assert-Contains -Content $readme -Expected "可用 slots" -Context "README concurrency policy"
-Assert-Contains -Content $readme -Expected "最多兩個" -Context "README writer limit"
-Assert-Contains -Content $readme -Expected "30 秒" -Context "README capacity retry"
-Assert-Contains -Content $readme -Expected "90 秒" -Context "README capacity retry"
-Assert-Contains -Content $readme -Expected "子代理使用" -Context "README subagent usage plan"
-Assert-Contains -Content $readme -Expected "子代理結果" -Context "README subagent usage outcome"
-Assert-Contains -Content $readme -Expected "已派發，角色與任務" -Context "README dispatched roles and tasks"
-Assert-Contains -Content $readme -Expected "未使用或派發失敗原因" -Context "README no-use or dispatch failure reason"
-
-Assert-Contains -Content $agents -Expected "Stop after two failed repair cycles" -Context "AGENTS.md"
-Assert-Contains -Content $skill -Expected "Stop after two failed repair cycles" -Context "orchestrate skill"
-Assert-Contains -Content $openAiMetadata -Expected "allow_implicit_invocation: false" -Context "orchestrate metadata"
-Assert-Contains -Content $copilotUser -Expected "Do not use the same agent context" -Context "Copilot user instructions"
-
-$codexAgentFiles = Get-ChildItem -LiteralPath (Join-Path $sourceRoot ".codex\agents") -Filter "*.toml" -File
-$reasoningByRole = @{
-    planner = "medium"
-    explorer = "low"
-    implementer = "medium"
-    verifier = "high"
-}
-foreach ($agentFile in $codexAgentFiles) {
-    $content = Get-Content -Raw -LiteralPath $agentFile.FullName
-    if ($content -match '(?m)^\s*model\s*=') {
-        throw "Codex agent pins a model: $($agentFile.FullName)"
-    }
-    $role = $agentFile.BaseName.Substring("orchestration_".Length)
-    Assert-Contains -Content $content -Expected ('model_reasoning_effort = "' + $reasoningByRole[$role] + '"') -Context "Codex $role reasoning effort"
-}
-
-$copilotAgentFiles = Get-ChildItem -LiteralPath (Join-Path $sourceRoot ".github\agents") -Filter "*.agent.md" -File
-foreach ($agentFile in $copilotAgentFiles) {
-    $content = Get-Content -Raw -LiteralPath $agentFile.FullName
-    if ($content -match '(?m)^model\s*:') {
-        throw "Copilot agent pins a model: $($agentFile.FullName)"
+foreach ($legacy in @('子代理使用：', '子代理結果：')) {
+    if ($agents.Contains($legacy) -or $skill.Contains($legacy) -or $copilotUser.Contains($legacy) -or $readme.Contains($legacy)) {
+        throw "Legacy subagent report remains: $legacy"
     }
 }
 
-Assert-Contains -Content $readme -Expected "5.6-luna" -Context "README model defaults"
-Assert-Contains -Content $readme -Expected ".codex-orchestration-models.json" -Context "README model sidecar"
-Assert-Contains -Content $readme -Expected "inherit" -Context "README manual model input"
-Assert-Contains -Content $readme -Expected "-Check" -Context "README non-interactive check"
-Assert-Contains -Content $readme -Expected "不再次詢問模型" -Context "README non-interactive check"
+Assert-Contains $planner 'Always produce contract version 1.1' 'Planner contract policy'
+Assert-Contains $planner 'timeout_seconds' 'Planner contract policy'
+Assert-Contains $planner 'expected_writes' 'Planner contract policy'
+Assert-Contains $implementer 'assigned bounded subtask' 'Plan-light implementer policy'
+if ($implementer.Contains('approved plan')) { throw 'Implementer still requires an approved heavy plan' }
+Assert-Contains $verifySkill 'Test-SourceBoundary.ps1' 'Verifier boundary policy'
+Assert-Contains $skill 'structured `verify_cmds`' 'Orchestrate v1.1 policy'
+Assert-Contains $openAiMetadata 'allow_implicit_invocation: false' 'Orchestrate metadata'
 
-Write-Output "All orchestration policy tests passed"
+$reasoningByRole = @{ planner = 'medium'; explorer = 'low'; implementer = 'high'; verifier = 'high' }
+foreach ($agentFile in Get-ChildItem -LiteralPath (Join-Path $sourceRoot '.codex\agents') -Filter '*.toml' -File) {
+    $content = Get-Content -Raw -LiteralPath $agentFile.FullName
+    if ($content -match '(?m)^\s*model\s*=.*\r?$') { throw "Codex agent pins a source model: $($agentFile.FullName)" }
+    $role = $agentFile.BaseName.Substring('orchestration_'.Length)
+    Assert-Contains $content ('model_reasoning_effort = "' + $reasoningByRole[$role] + '"') "Codex $role reasoning effort"
+}
+foreach ($agentFile in Get-ChildItem -LiteralPath (Join-Path $sourceRoot '.github\agents') -Filter '*.agent.md' -File) {
+    if ((Get-Content -Raw -LiteralPath $agentFile.FullName) -match '(?m)^model\s*:.*\r?$') { throw "Copilot agent pins a source model: $($agentFile.FullName)" }
+}
+
+Assert-Contains $readme 'gpt-5.6-luna' 'README model defaults'
+Assert-Contains $readme 'max_threads = 3' 'README thread throttle'
+Assert-Contains $readme 'max_depth = 1' 'README recursion throttle'
+Assert-Contains $readme 'lane-scenarios.v1.json' 'README scenario evaluation'
+Assert-Contains $readme 'Invoke-LaneScenariosLive' 'README live evaluation'
+Assert-Contains $readme '.codex-orchestration-models.json' 'README model sidecar'
+Assert-Contains $readme '不會自動遷移' 'README legacy sidecar behavior'
+
+Write-Output 'All orchestration policy tests passed'

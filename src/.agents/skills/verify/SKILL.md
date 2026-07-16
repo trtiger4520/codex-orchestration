@@ -11,9 +11,11 @@ Perform acceptance verification in a context that did not implement the change
 
 1. Determine the requested scope from the text following `$verify`
 2. When no scope is supplied, inspect all current uncommitted changes or all files identified by the parent task
-3. Send the scope, acceptance criteria, and claimed changes to `orchestration_verifier`
-4. Require the verifier to inspect the actual change and run the real project commands
-5. Return the verdict and evidence without modifying files
+3. Review allowed build and test artifact globs, then capture tracked and non-ignored untracked hashes with `scripts/Test-SourceBoundary.ps1 -Mode Capture` or `scripts/Test-SourceBoundary.sh --capture`
+4. Send the scope, acceptance criteria, claimed changes, reviewed commands, and allowed artifact globs to `orchestration_verifier`
+5. Require the verifier to inspect the actual change and run the real project commands
+6. Verify the snapshot with the matching script and invalidate the verdict if any source changed outside allowed artifact globs
+7. Return the verdict and evidence without modifying files
 
 ## Verdict requirements
 

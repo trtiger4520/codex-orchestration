@@ -156,8 +156,8 @@ load_model_settings() {
     sidecar_path=$1
     if [ ! -f "$sidecar_path" ]; then
         model_planner=""
-        model_explorer="5.6-luna"
-        model_implementer="5.6-luna"
+        model_explorer="gpt-5.6-luna"
+        model_implementer="gpt-5.6-luna"
         model_verifier=""
         return
     fi
@@ -169,7 +169,7 @@ import sys
 
 path = sys.argv[1]
 roles = ("planner", "explorer", "implementer", "verifier")
-defaults = {"planner": None, "explorer": "5.6-luna", "implementer": "5.6-luna", "verifier": None}
+defaults = {"planner": None, "explorer": "gpt-5.6-luna", "implementer": "gpt-5.6-luna", "verifier": None}
 try:
     with open(path, "r", encoding="utf-8") as sidecar:
         parsed = json.load(sidecar)
@@ -234,9 +234,9 @@ configure_models() {
 
     prompt_model planner ""
     model_planner=$REPLY
-    prompt_model explorer "5.6-luna"
+    prompt_model explorer "gpt-5.6-luna"
     model_explorer=$REPLY
-    prompt_model implementer "5.6-luna"
+    prompt_model implementer "gpt-5.6-luna"
     model_implementer=$REPLY
     prompt_model verifier ""
     model_verifier=$REPLY

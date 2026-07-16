@@ -20,5 +20,9 @@ Return exactly two sections:
 The contract root must contain `version`, `lane`, `summary`, and `tasks`
 Each task must contain `id`, `mode`, `goal`, `files`, `depends_on`, `risk`, `acceptance_criteria`, and `verify_cmds`
 Use only the schema enums and repo-relative paths or globs in `files`
+Always produce contract version `1.1`
+Each `verify_cmds` item must contain `command`, `cwd`, `purpose`, `timeout_seconds`, and `expected_writes`
+Use repository-relative paths for `cwd` and `expected_writes`, never absolute paths or parent traversal
 Keep task ids unique, reference only existing dependencies, reject cycles, and give every write task at least one file and verification command
+The parent reviews every command before execution, so do not use chaining, redirection, package installation, network access, or destructive operations unless the requested verification specifically requires them
 Do not schedule agents, dispatch work, or produce an executable DAG

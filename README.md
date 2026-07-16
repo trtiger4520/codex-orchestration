@@ -16,8 +16,8 @@
 | Agent | 模型設定 | Reasoning | 職責 |
 |---|---|---|---|
 | `orchestration_planner` | 預設繼承，不寫入 `model`；可手動指定 | `medium` | 產生以完整交付單元分組的計畫與驗收條件 |
-| `orchestration_explorer` | 預設 `5.6-luna`；可手動指定或改為繼承 | `low` | 快速搜尋、追蹤呼叫鏈、整理現有模式 |
-| `orchestration_implementer` | 預設 `5.6-luna`；可手動指定或改為繼承 | `medium` | 完成一個 cohesive delivery unit 並執行窄範圍驗證 |
+| `orchestration_explorer` | 預設 `gpt-5.6-luna`；可手動指定或改為繼承 | `low` | 快速搜尋、追蹤呼叫鏈、整理現有模式 |
+| `orchestration_implementer` | 預設 `gpt-5.6-luna`；可手動指定或改為繼承 | `high` | 完成一個 bounded cohesive delivery unit 並執行窄範圍驗證 |
 | `orchestration_verifier` | 預設繼承，不寫入 `model`；可手動指定 | `high` | 獨立檢查完整變更並執行實際測試 |
 
 Codex custom agent 固定使用表中的 `model_reasoning_effort`，避免所有角色繼承父工作階段的高推理強度；安裝器仍只依互動設定轉換 `model`，不擴充 sidecar；使用 `inherit` 時會省略 Codex TOML 與 Copilot front matter 的 `model`；Copilot agent 不加入未確認支援的 reasoning 欄位
@@ -26,31 +26,34 @@ Codex custom agent 固定使用表中的 `model_reasoning_effort`，避免所有
 
 模型設定會保存於 sidecar：Project Scope 是目標專案根目錄的 `.codex-orchestration-models.json`，User Scope 是 `$HOME/.codex-orchestration-models.json`。sidecar 只保存非繼承的模型值，重新執行 `-Check` 時會讀取該檔案、不再次詢問模型，也不建立或更新任何檔案
 
+舊 sidecar 中明確保存的 `5.6-luna` 會被視為使用者設定，`-Check` 不會自動遷移；只有重新執行互動安裝並採用新預設時，才會保存完整 ID `gpt-5.6-luna`
+
 ## 工作流程
 
 主代理先依風險與協作需求選擇執行 lane：
 
-- `single-agent`：主代理可直接完成的日常低風險工作，不建立子代理，也不等待計畫核准
-- `plan-light`：一般非高風險工作的預設，包括跨檔案、跨模組、跨平台或陌生路徑；由主代理提出短計畫，除非使用者要求，否則不等待核准，最多派一個 implementer 完成同一交付單元
+- `single-agent`：已知路徑、局部修改，或可由確定性工具直接驗證的日常低風險工作，不建立子代理
+- `plan-light`：需要短計畫的非高風險工作，預設零子代理；如委派具明確收益，最多從 explorer、implementer、verifier 選一種角色且只派一個
 - `orchestrate-heavy`：僅限使用者明確要求完整協作，或涉及安全、資料遷移、正式部署、核心架構、破壞性公開契約的高風險工作
 
 檔案數、步驟數、跨模組、跨平台與陌生路徑都不會單獨觸發完整流程；單獨要求獨立驗證時只需增加 verifier，不強制建立其他角色
 
-### 子代理使用回報
+### 委派閘門
 
-任務分類後、開始工作前，主代理必須回報是否使用子代理與模式：
+主代理會先做有限探索，且至少符合以下兩項才委派：
 
-```text
-子代理使用：<是|否>｜模式：<single-agent|plan-light|orchestrate-heavy>｜不使用原因：<...>
-```
+- 可獨立完成且不需要頻繁交換上下文
+- 會產生大量搜尋結果、log 或中間證據
+- 有明確輸入、停止條件與精簡輸出格式
+- 主代理同時有其他獨立工作可進行
+- 能隔離大量主上下文噪音
+- 結果可觀察或能以確定性工具驗證
 
-任務完成時，主代理必須回報實際派發結果，讓使用者能區分已派發、未使用與派發失敗：
+已知少量修改、主代理已掌握上下文、需要連續設計決策、委派後仍須完整重做，或只是執行既有 build、lint、test 時不委派；有限探索無法快速收斂時，才升級為單一 explorer
 
-```text
-子代理結果：<已派發，角色與任務：... | 未派發，未使用或派發失敗原因：...>
-```
+### 完成紀錄
 
-未使用子代理時，須填寫原因。派發失敗時，需填寫觀察到的錯誤與重派結果
+每個任務完成時只輸出一筆精簡 JSON，不自動寫入 repository。欄位包含 `lane`、`delegated_role`、`delegation_reason`、`subagent_count`、`dispatch_status`、`dispatch_error`、`repair_cycles`、`verification_result`、`files_changed`，以及有工具證據時才填值的 `input_tokens`、`output_tokens`、`elapsed_seconds`；沒有證據或不適用時使用 `null`
 
 `orchestrate-heavy` 流程如下：
 
@@ -59,15 +62,25 @@ Codex custom agent 固定使用表中的 `model_reasoning_effort`，避免所有
 3. 主代理向使用者顯示計畫並等待明確核准
 4. explorer 只針對仍不清楚的程式路徑補充證據
 5. 主代理檢查可用 slots、風險、相依關係與檔案衝突，使用最少 writers 且最多兩個，高風險工作固定單 writer
-6. implementer 各自處理一個完整且已核准的交付單元
+6. implementer 各自處理一個完整且已核准的交付單元；`plan-light` implementer 則可處理邊界穩定且驗收條件清楚的 bounded task，不要求 heavy plan
 7. 若派發收到 `Selected model is at capacity` 或等效的暫時性子代理可用性錯誤，主代理會在 30 秒、90 秒後，以原角色與未變更的子任務各重派一次
 8. 兩次重派仍失敗時，回報原始錯誤與未完成子任務，不臆測可用模型、不自動 fallback，也不變更已核准範圍
-9. verifier 以單一獨立 context 檢查完整變更並親自執行測試
-10. 驗收失敗時交回原 implementer context，並由同一 verifier context 複驗；每次只重跑失敗檢查，blocker 清除後完整套件只執行一次，最多兩次修正循環
+9. parent 審查結構化驗證命令，未另行核准時拒絕 shell chaining、重導向、套件安裝、網路存取與破壞性操作
+10. verifier 前後使用 source-boundary guard 比較 tracked 與 non-ignored untracked 檔案雜湊，只允許已審查的 build/test artifact globs
+11. verifier 以單一獨立 context 檢查完整變更並親自執行測試；來源檔案越界時驗證結果失效
+12. 驗收失敗時交回原 implementer context，並由同一 verifier context 複驗；每次只重跑失敗檢查，blocker 清除後完整套件只執行一次，最多兩次修正循環
 
 子代理協調優先使用介面原生工具與事件式等待，不把等待包進一般 `exec`；介面沒有事件式等待時，每 30 至 60 秒檢查一次，只有狀態變化才回報；測試命名、格式偏好或已有等效覆蓋的追溯性意見列為 non-blocking note
 
-本設定包不新增或設定 `.codex/config.toml`，因此沿用目前介面的 agent thread 上限。動態 read 併發與最多兩個 writers 都是工作流程規則，不是服務端容量預查，也不會為提高併發指定模型或修改 thread 上限
+本設定包不新增或設定 `.codex/config.toml`，因此沿用目前介面的 agent thread 上限。若希望限制 Token 峰值，可自行加入以下選配設定，安裝器不會代為修改：
+
+```toml
+[agents]
+max_threads = 3
+max_depth = 1
+```
+
+動態 read 併發與最多兩個 writers 都是工作流程規則，不是服務端容量預查，也不會為提高併發指定模型或修改 thread 上限
 
 ## 專案結構
 
@@ -76,8 +89,8 @@ Codex custom agent 固定使用表中的 `model_reasoning_effort`，避免所有
 ├── src/                            安裝器使用的主要設定內容
 │   ├── .codex/agents/              Codex App 與 CLI agents
 │   ├── .agents/skills/
-│   │   ├── orchestrate/            完整協作 workflow、contract schema 與 validator
-│   │   └── verify/                 獨立驗收 workflow
+│   │   ├── orchestrate/            完整協作 workflow、v1.1 contract 與 lane scenario eval
+│   │   └── verify/                 獨立驗收 workflow 與 source-boundary guard
 │   ├── .github/agents/              GitHub Copilot agents
 │   ├── .github/copilot-instructions.md
 │   ├── .github/copilot-user-instructions.md
@@ -178,7 +191,9 @@ bash ./install.sh --scope project --platform all --project-path ~/src/my-project
 
 planner 回報計畫後，流程會等待你核准才開始修改
 
-planner 的 fenced JSON contract 使用 `.agents/skills/orchestrate/references/orchestration-plan.schema.json`，可在 materialize 成 JSON 檔後驗證：
+planner 新產生的 fenced JSON contract 固定使用 v1.1；`verify_cmds` 的每個項目包含 `command`、`cwd`、`purpose`、`timeout_seconds`、`expected_writes`。`cwd` 與 write globs 必須是 repository-relative，不可使用絕對路徑或 `..` 跳脫。validator 仍接受既有 v1.0 字串命令，但 contract 只作為 declarative input，parent 審查後才會執行
+
+contract 使用 `.agents/skills/orchestrate/references/orchestration-plan.schema.json`，可在 materialize 成 JSON 檔後驗證：
 
 ```powershell
 pwsh ./.agents/skills/orchestrate/scripts/Test-OrchestrationPlan.ps1 -PlanFile ./plan.json
@@ -193,7 +208,7 @@ bash ./.agents/skills/orchestrate/scripts/Test-OrchestrationPlan.sh --plan-file 
 執行完整套件測試：
 
 ```powershell
-pwsh ./tests/Test-Package.ps1
+pwsh -NoProfile -File ./tests/Test-Package.ps1
 ```
 
 在 macOS 與 Linux，可執行 Bash installer 與 contract 測試：
@@ -201,6 +216,22 @@ pwsh ./tests/Test-Package.ps1
 ```bash
 bash ./tests/Test-Installer.sh
 bash ./tests/Test-Contract.sh
+bash ./tests/Test-LaneScenarios.sh
+bash ./tests/Test-SourceBoundary.sh
+```
+
+### Lane scenario eval
+
+版本化案例矩陣位於 `.agents/skills/orchestrate/references/lane-scenarios.v1.json`，涵蓋已知 DTO、陌生登入流程、CRUD、CI log、獨立驗證、EF Core migration、authentication policy、多文件機械修改與完整交付單元。日常 deterministic test 只驗證格式、角色集合與 lane invariants，不呼叫模型
+
+需要觀察實際分類行為時，可選配執行 live runner；它會在暫存 Git repository 載入 `src/AGENTS.md`，以 `codex exec --sandbox read-only --output-schema` 逐案判斷。預設沿用目前 Codex 模型，也可用 `-Model` 或 `--model` 指定模型。此測試需要 Codex CLI、有效登入及網路，不屬於日常 package tests
+
+```powershell
+pwsh -NoProfile -File ./src/.agents/skills/orchestrate/scripts/Invoke-LaneScenariosLive.ps1
+```
+
+```bash
+bash ./src/.agents/skills/orchestrate/scripts/Invoke-LaneScenariosLive.sh
 ```
 
 ### 獨立驗收
@@ -210,6 +241,18 @@ bash ./tests/Test-Contract.sh
 ```
 
 驗收失敗時只回報需要修正的項目，不會直接修改檔案
+
+獨立驗收前後可使用 boundary guard。snapshot 記錄 tracked 與 non-ignored untracked 檔案，`-AllowedWrite`／`--allow-write` 只接受 parent 已審查的 repository-relative artifact globs；任何其他變更都會使驗證失效
+
+```powershell
+pwsh ./.agents/skills/verify/scripts/Test-SourceBoundary.ps1 -Mode Capture -SnapshotFile ./.git/verifier-boundary.json
+pwsh ./.agents/skills/verify/scripts/Test-SourceBoundary.ps1 -Mode Verify -SnapshotFile ./.git/verifier-boundary.json -AllowedWrite '**/bin/**','**/obj/**','**/TestResults/**'
+```
+
+```bash
+bash ./.agents/skills/verify/scripts/Test-SourceBoundary.sh --capture --snapshot-file ./.git/verifier-boundary.json
+bash ./.agents/skills/verify/scripts/Test-SourceBoundary.sh --verify --snapshot-file ./.git/verifier-boundary.json --allow-write '**/bin/**' --allow-write '**/obj/**' --allow-write '**/TestResults/**'
+```
 
 Codex CLI 與 Copilot CLI 都可以使用 `/agent` 查看或切換 custom agent
 
@@ -223,7 +266,7 @@ Codex CLI 與 Copilot CLI 都可以使用 `/agent` 查看或切換 custom agent
 
 ## 模型可用性與容量
 
-安裝器只將 `5.6-luna` 設為 explorer 與 implementer 的初始預設，不將 GPT-5.6、Spark 或其他具名模型作為全域 fallback。模型是否可用、容量是否足夠，皆由目前工作階段與服務端決定，沒有可在派發前使用的服務端容量預查
+安裝器只將完整模型 ID `gpt-5.6-luna` 設為 explorer 與 implementer 的初始預設，不將 GPT-5.6、Spark 或其他具名模型作為全域 fallback。模型是否可用、容量是否足夠，皆由目前工作階段與服務端決定，沒有可在派發前使用的服務端容量預查
 
 容量錯誤的處理方式僅限於工作流程中的兩次原任務重派。若仍無法建立子代理，會保留原始錯誤並回報未完成項目，不會靜默改派其他模型
 

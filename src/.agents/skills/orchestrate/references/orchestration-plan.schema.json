@@ -4,107 +4,99 @@
   "title": "Orchestration plan contract",
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "version",
-    "lane",
-    "summary",
-    "tasks"
-  ],
+  "required": ["version", "lane", "summary", "tasks"],
   "properties": {
-    "version": {
-      "type": "string",
-      "enum": [
-        "1.0"
-      ]
-    },
-    "lane": {
-      "type": "string",
-      "enum": [
-        "single-agent",
-        "plan-light",
-        "orchestrate-heavy"
-      ]
-    },
-    "summary": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 200
-    },
-    "tasks": {
-      "type": "array",
-      "minItems": 1,
-      "items": {
-        "$ref": "#/definitions/task"
-      }
-    }
+    "version": { "type": "string", "enum": ["1.0", "1.1"] },
+    "lane": { "type": "string", "enum": ["single-agent", "plan-light", "orchestrate-heavy"] },
+    "summary": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "tasks": { "type": "array", "minItems": 1 }
   },
-  "definitions": {
-    "nonEmptyString": {
-      "type": "string",
-      "minLength": 1
+  "allOf": [
+    {
+      "if": { "properties": { "version": { "const": "1.0" } }, "required": ["version"] },
+      "then": { "properties": { "tasks": { "items": { "$ref": "#/definitions/taskV1" } } } }
     },
+    {
+      "if": { "properties": { "version": { "const": "1.1" } }, "required": ["version"] },
+      "then": { "properties": { "tasks": { "items": { "$ref": "#/definitions/taskV11" } } } }
+    }
+  ],
+  "definitions": {
+    "nonEmptyString": { "type": "string", "minLength": 1 },
     "stringList": {
       "type": "array",
-      "items": {
-        "$ref": "#/definitions/nonEmptyString"
+      "items": { "$ref": "#/definitions/nonEmptyString" }
+    },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "not": {
+        "anyOf": [
+          { "pattern": "^(?:[A-Za-z]:|[\\\\/]{1,2})" },
+          { "pattern": "(^|[\\\\/])\\.\\.($|[\\\\/])" }
+        ]
       }
     },
-    "task": {
+    "taskProperties": {
+      "id": { "type": "string", "minLength": 1, "pattern": "^[a-z0-9][a-z0-9_-]*$" },
+      "mode": { "type": "string", "enum": ["read", "write", "review"] },
+      "goal": { "$ref": "#/definitions/nonEmptyString" },
+      "files": { "$ref": "#/definitions/stringList" },
+      "depends_on": { "$ref": "#/definitions/stringList" },
+      "risk": { "type": "string", "enum": ["low", "medium", "high"] },
+      "acceptance_criteria": {
+        "allOf": [
+          { "$ref": "#/definitions/stringList" },
+          { "minItems": 1 }
+        ]
+      }
+    },
+    "verificationCommand": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "id",
-        "mode",
-        "goal",
-        "files",
-        "depends_on",
-        "risk",
-        "acceptance_criteria",
-        "verify_cmds"
-      ],
+      "required": ["command", "cwd", "purpose", "timeout_seconds", "expected_writes"],
       "properties": {
-        "id": {
-          "type": "string",
-          "minLength": 1,
-          "pattern": "^[a-z0-9][a-z0-9_-]*$"
-        },
-        "mode": {
-          "type": "string",
-          "enum": [
-            "read",
-            "write",
-            "review"
-          ]
-        },
-        "goal": {
-          "$ref": "#/definitions/nonEmptyString"
-        },
-        "files": {
-          "$ref": "#/definitions/stringList"
-        },
-        "depends_on": {
-          "$ref": "#/definitions/stringList"
-        },
-        "risk": {
-          "type": "string",
-          "enum": [
-            "low",
-            "medium",
-            "high"
-          ]
-        },
-        "acceptance_criteria": {
-          "allOf": [
-            {
-              "$ref": "#/definitions/stringList"
-            },
-            {
-              "minItems": 1
-            }
-          ]
-        },
+        "command": { "$ref": "#/definitions/nonEmptyString" },
+        "cwd": { "$ref": "#/definitions/relativePath" },
+        "purpose": { "$ref": "#/definitions/nonEmptyString" },
+        "timeout_seconds": { "type": "integer", "minimum": 1, "maximum": 86400 },
+        "expected_writes": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/relativePath" },
+          "uniqueItems": true
+        }
+      }
+    },
+    "taskV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "mode", "goal", "files", "depends_on", "risk", "acceptance_criteria", "verify_cmds"],
+      "properties": {
+        "id": { "$ref": "#/definitions/taskProperties/id" },
+        "mode": { "$ref": "#/definitions/taskProperties/mode" },
+        "goal": { "$ref": "#/definitions/taskProperties/goal" },
+        "files": { "$ref": "#/definitions/taskProperties/files" },
+        "depends_on": { "$ref": "#/definitions/taskProperties/depends_on" },
+        "risk": { "$ref": "#/definitions/taskProperties/risk" },
+        "acceptance_criteria": { "$ref": "#/definitions/taskProperties/acceptance_criteria" },
+        "verify_cmds": { "$ref": "#/definitions/stringList" }
+      }
+    },
+    "taskV11": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "mode", "goal", "files", "depends_on", "risk", "acceptance_criteria", "verify_cmds"],
+      "properties": {
+        "id": { "$ref": "#/definitions/taskProperties/id" },
+        "mode": { "$ref": "#/definitions/taskProperties/mode" },
+        "goal": { "$ref": "#/definitions/taskProperties/goal" },
+        "files": { "$ref": "#/definitions/taskProperties/files" },
+        "depends_on": { "$ref": "#/definitions/taskProperties/depends_on" },
+        "risk": { "$ref": "#/definitions/taskProperties/risk" },
+        "acceptance_criteria": { "$ref": "#/definitions/taskProperties/acceptance_criteria" },
         "verify_cmds": {
-          "$ref": "#/definitions/stringList"
+          "type": "array",
+          "items": { "$ref": "#/definitions/verificationCommand" }
         }
       }
     }

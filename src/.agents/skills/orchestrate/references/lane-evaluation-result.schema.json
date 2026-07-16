@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://openai.local/schemas/lane-evaluation-result.schema.json",
+  "title": "Lane evaluation result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["lane", "delegated_roles", "approval_required", "rationale"],
+  "properties": {
+    "lane": {
+      "type": "string",
+      "enum": ["single-agent", "plan-light", "orchestrate-heavy"]
+    },
+    "delegated_roles": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": ["orchestration_planner", "orchestration_explorer", "orchestration_implementer", "orchestration_verifier"]
+      }
+    },
+    "approval_required": { "type": "boolean" },
+    "rationale": { "type": "string", "minLength": 1, "maxLength": 300 }
+  }
+}

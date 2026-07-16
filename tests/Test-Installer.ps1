@@ -101,8 +101,8 @@ try {
 
         $sidecar = Get-Content -Raw -Encoding utf8 -LiteralPath (Join-Path $project ".codex-orchestration-models.json") | ConvertFrom-Json
         Assert-True (-not ($sidecar.PSObject.Properties.Name -contains "planner")) "Planner default was not inherited"
-        Assert-True ($sidecar.explorer -eq "5.6-luna") "Explorer default was not saved"
-        Assert-True ($sidecar.implementer -eq "5.6-luna") "Implementer default was not saved"
+        Assert-True ($sidecar.explorer -eq "gpt-5.6-luna") "Explorer default was not saved"
+        Assert-True ($sidecar.implementer -eq "gpt-5.6-luna") "Implementer default was not saved"
         Assert-True (-not ($sidecar.PSObject.Properties.Name -contains "verifier")) "Verifier default was not inherited"
 
         foreach ($role in @("planner", "verifier")) {
@@ -112,7 +112,7 @@ try {
             Assert-True ($copilot -notmatch '(?m)^model\s*:') "Inherited Copilot model was written for $role"
         }
 
-        $reasoningByRole = @{ planner = "medium"; explorer = "low"; implementer = "medium"; verifier = "high" }
+        $reasoningByRole = @{ planner = "medium"; explorer = "low"; implementer = "high"; verifier = "high" }
         foreach ($role in $reasoningByRole.Keys) {
             $codex = Get-Content -Raw -Encoding utf8 -LiteralPath (Join-Path $project ".codex/agents/orchestration_$role.toml")
             $copilot = Get-Content -Raw -Encoding utf8 -LiteralPath (Join-Path $project ".github/agents/orchestration_$role.agent.md")
@@ -123,8 +123,8 @@ try {
         foreach ($role in @("explorer", "implementer")) {
             $codex = Get-Content -Raw -Encoding utf8 -LiteralPath (Join-Path $project ".codex/agents/orchestration_$role.toml")
             $copilot = Get-Content -Raw -Encoding utf8 -LiteralPath (Join-Path $project ".github/agents/orchestration_$role.agent.md")
-            Assert-True ($codex.Contains('model = "5.6-luna"')) "Explorer or implementer Codex default was not written for $role"
-            Assert-True ($copilot.Contains('model: "5.6-luna"')) "Explorer or implementer Copilot default was not written for $role"
+            Assert-True ($codex.Contains('model = "gpt-5.6-luna"')) "Explorer or implementer Codex default was not written for $role"
+            Assert-True ($copilot.Contains('model: "gpt-5.6-luna"')) "Explorer or implementer Copilot default was not written for $role"
         }
     }
 
@@ -144,7 +144,7 @@ try {
             $expectedCopilot = 'model: "' + "custom-$role" + '"'
             Assert-True ($codex.Contains($expectedCodex)) "Custom Codex model was not written for $role"
             Assert-True ($copilot.Contains($expectedCopilot)) "Custom Copilot model was not written for $role"
-            Assert-True ($codex -match '(?m)^model_reasoning_effort\s*=\s*"(low|medium|high)"$') "Custom model rendering removed reasoning effort for $role"
+            Assert-True ($codex -match '(?m)^model_reasoning_effort\s*=\s*"(low|medium|high)"\r?$') "Custom model rendering removed reasoning effort for $role"
         }
 
         $before = Get-TreeSnapshot -Path $project
@@ -153,6 +153,21 @@ try {
         Assert-True ($check.ExitCode -eq 0) "Custom model check failed: $($check.Output)"
         Assert-True (-not $check.Output.Contains("Model for ")) "Check prompted for model input"
         Assert-True ($before -eq $after) "Check changed files or sidecar"
+    }
+
+    Invoke-Test "legacy luna sidecar remains explicit and Check does not migrate it" {
+        $project = Join-Path $testRoot "model-legacy-luna"
+        New-Item -ItemType Directory -Force -Path $project | Out-Null
+        $install = Invoke-Installer -Arguments @("-Scope", "Project", "-Platform", "All", "-ProjectPath", $project) -ModelInputs @("inherit", "5.6-luna", "5.6-luna", "inherit")
+        Assert-True ($install.ExitCode -eq 0) $install.Output
+        $before = Get-TreeSnapshot -Path $project
+        $check = Invoke-Installer -Arguments @("-Scope", "Project", "-Platform", "All", "-ProjectPath", $project, "-Check") -ModelInputs $null
+        $after = Get-TreeSnapshot -Path $project
+        Assert-True ($check.ExitCode -eq 0) "Legacy sidecar check failed: $($check.Output)"
+        Assert-True ($before -eq $after) "Check migrated the legacy sidecar"
+        $sidecar = Get-Content -Raw -LiteralPath (Join-Path $project '.codex-orchestration-models.json')
+        Assert-True ($sidecar.Contains('"explorer":"5.6-luna"')) 'Legacy explorer model was migrated'
+        Assert-True ($sidecar.Contains('"implementer":"5.6-luna"')) 'Legacy implementer model was migrated'
     }
 
     Invoke-Test "malformed and invalid model sidecars are rejected" {
