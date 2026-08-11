@@ -4,21 +4,21 @@
 
 ## 支援範圍
 
-| 功能 | Codex App | Codex CLI | Copilot CLI | VS Code / Copilot cloud agent |
-|---|---|---|---|---|
-| 專責 custom agents | 支援 | 支援 | 支援 | 支援，依產品可用性而定 |
-| `$orchestrate`、`$verify` skills | 支援 | 支援 | 支援 | 支援 Agent Skills 的介面可用 |
-| 子代理模型選擇 | 由安裝時設定，未指定時繼承 | 由安裝時設定，未指定時繼承 | 由安裝時設定，未指定時繼承 | 依產品可用性而定 |
-| 專案規則 | `AGENTS.md` | `AGENTS.md` | `AGENTS.md` / Copilot instructions | Copilot instructions |
+| 功能                             | Codex App                  | Codex CLI                  | Copilot CLI                        | VS Code / Copilot cloud agent |
+| -------------------------------- | -------------------------- | -------------------------- | ---------------------------------- | ----------------------------- |
+| 專責 custom agents               | 支援                       | 支援                       | 支援                               | 支援，依產品可用性而定        |
+| `$orchestrate`、`$verify` skills | 支援                       | 支援                       | 支援                               | 支援 Agent Skills 的介面可用  |
+| 子代理模型選擇                   | 由安裝時設定，未指定時繼承 | 由安裝時設定，未指定時繼承 | 由安裝時設定，未指定時繼承         | 依產品可用性而定              |
+| 專案規則                         | `AGENTS.md`                | `AGENTS.md`                | `AGENTS.md` / Copilot instructions | Copilot instructions          |
 
 ## 角色與模型設定
 
-| Agent | 模型設定 | Reasoning | 職責 |
-|---|---|---|---|
-| `orchestration_planner` | 預設繼承，不寫入 `model`；可手動指定 | `medium` | 產生以完整交付單元分組的計畫與驗收條件 |
-| `orchestration_explorer` | 預設 `gpt-5.6-luna`；可手動指定或改為繼承 | `low` | 快速搜尋、追蹤呼叫鏈、整理現有模式 |
-| `orchestration_implementer` | 預設 `gpt-5.6-luna`；可手動指定或改為繼承 | `high` | 完成一個 bounded cohesive delivery unit 並執行窄範圍驗證 |
-| `orchestration_verifier` | 預設繼承，不寫入 `model`；可手動指定 | `high` | 獨立檢查完整變更並執行實際測試 |
+| Agent                       | 模型設定                                  | Reasoning | 職責                                                     |
+| --------------------------- | ----------------------------------------- | --------- | -------------------------------------------------------- |
+| `orchestration_planner`     | 預設繼承，不寫入 `model`；可手動指定      | `medium`  | 產生以完整交付單元分組的計畫與驗收條件                   |
+| `orchestration_explorer`    | 預設 `gpt-5.6-luna`；可手動指定或改為繼承 | `low`     | 快速搜尋、追蹤呼叫鏈、整理現有模式                       |
+| `orchestration_implementer` | 預設 `gpt-5.6-luna`；可手動指定或改為繼承 | `high`    | 完成一個 bounded cohesive delivery unit 並執行窄範圍驗證 |
+| `orchestration_verifier`    | 預設繼承，不寫入 `model`；可手動指定      | `high`    | 獨立檢查完整變更並執行實際測試                           |
 
 Codex custom agent 固定使用表中的 `model_reasoning_effort`，避免所有角色繼承父工作階段的高推理強度；安裝器仍只依互動設定轉換 `model`，不擴充 sidecar；使用 `inherit` 時會省略 Codex TOML 與 Copilot front matter 的 `model`；Copilot agent 不加入未確認支援的 reasoning 欄位
 
@@ -50,10 +50,6 @@ Codex custom agent 固定使用表中的 `model_reasoning_effort`，避免所有
 - 結果可觀察或能以確定性工具驗證
 
 已知少量修改、主代理已掌握上下文、需要連續設計決策、委派後仍須完整重做，或只是執行既有 build、lint、test 時不委派；有限探索無法快速收斂時，才升級為單一 explorer
-
-### 完成紀錄
-
-每個任務完成時只輸出一筆精簡 JSON，不自動寫入 repository。欄位包含 `lane`、`delegated_agents`、`delegation_reason`、`subagent_count`、`dispatch_status`、`dispatch_error`、`repair_cycles`、`verification_result`、`files_changed`，以及有工具證據時才填值的 `input_tokens`、`output_tokens`、`elapsed_seconds`；`delegated_agents` 使用唯一的 `{ "role": "<role>", "count": <count> }` 項目，planner、explorer、verifier 的 count 固定為 `1`，implementer 可為 `1` 或 `2`，`subagent_count` 必須等於所有 `count` 總和；未委派時使用空陣列與 `0`
 
 `orchestrate-heavy` 流程如下：
 
