@@ -43,16 +43,6 @@
 - Before independent verification, capture the repository source boundary; after verification, invalidate the result if tracked or non-ignored untracked files changed outside reviewed artifact globs
 - Send the complete approved change to one independent `orchestration_verifier`
 
-## Completion record
-
-- Emit exactly one compact JSON object at task completion and do not write it to the repository automatically
-- Include `lane`, `delegated_agents`, `delegation_reason`, `subagent_count`, `dispatch_status`, `dispatch_error`, `repair_cycles`, `verification_result`, and `files_changed`
-- Represent `delegated_agents` as unique `{ "role": "<role>", "count": <count> }` entries; `subagent_count` must equal the sum of all counts
-- Use `count: 1` for planner, explorer, and verifier entries, and `count: 1` or `count: 2` for the implementer entry
-- Use `delegated_agents: []` and `subagent_count: 0` when no delegation occurred
-- Include `input_tokens`, `output_tokens`, and `elapsed_seconds` only from observed tool evidence; otherwise set them to `null`
-- Use `null` for `delegation_reason` and `dispatch_error` when they do not apply
-
 ## Repair and verification
 
 - On verifier FAIL, return only blocking findings to the original implementer context whenever it is available
